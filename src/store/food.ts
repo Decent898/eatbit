@@ -57,6 +57,18 @@ export interface FoodShop {
   creatorUserId?: number
 }
 
+export interface FeedbackTicket {
+  id: number
+  title: string
+  content: string
+  status: 'open' | 'closed'
+  userId?: number
+  userEmail: string
+  userNickname: string
+  createdAt: string
+  closedAt: string
+}
+
 function similarity(a: string, b: string) {
   const left = new Set(a.trim().toLowerCase())
   const right = new Set(b.trim().toLowerCase())
@@ -671,6 +683,27 @@ async function loadFromApi() {
   }
 }
 
+async function adminFetchTickets() {
+  const response = await fetch('/api/tickets')
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'admin required' })) as { error?: string }
+    throw new Error(data.error || 'admin required')
+  }
+  return response.json() as Promise<{ tickets: FeedbackTicket[] }>
+}
+
+async function adminUpdateTicket(ticketId: number, status: 'open' | 'closed') {
+  const response = await fetch('/api/tickets', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ticketId, status })
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'update ticket failed' })) as { error?: string }
+    throw new Error(data.error || 'update ticket failed')
+  }
+}
+
 export function useFoodStore() {
   return {
     areas: computed(() => state.areas),
@@ -707,6 +740,8 @@ export function useFoodStore() {
     suggestShopNames,
     suggestItemNames,
     setShopClosed,
-    setItemOffShelf
+    setItemOffShelf,
+    adminFetchTickets,
+    adminUpdateTicket
   }
 }

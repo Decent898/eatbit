@@ -24,6 +24,12 @@ const router = createRouter({
       component: () => import('@/views/AreaShow.vue')
     },
     {
+      path: '/admin',
+      name: 'admin-dashboard',
+      component: () => import('@/views/AdminDashboard.vue'),
+      meta: { keepAlive: false }
+    },
+    {
       path: '/admin/canteens',
       name: 'admin-canteens',
       component: () => import('@/views/AdminCanteens.vue'),
@@ -60,6 +66,7 @@ router.beforeEach((to) => {
     shop: '店面详情',
     profile: '个人中心',
     feedback: '问题反馈',
+    'admin-dashboard': '管理员后台',
     'admin-canteens': '食堂区管理',
     'not-found': '页面不存在'
   }

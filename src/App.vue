@@ -35,6 +35,7 @@ const menuOptions: MenuOption[] = [
   { label: '店面发现', key: '/home?tab=search', icon: renderIcon(RestaurantOutlined) },
   { label: '个人中心', key: '/profile', icon: renderIcon(PersonOutlineOutlined) },
   { label: '问题反馈', key: '/feedback', icon: renderIcon(FeedbackOutlined) },
+  { label: '管理员后台', key: '/admin', icon: renderIcon(AdminPanelSettingsOutlined) },
   { label: '食堂区管理', key: '/admin/canteens', icon: renderIcon(AdminPanelSettingsOutlined) }
 ]
 

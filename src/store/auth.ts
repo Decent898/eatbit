@@ -8,6 +8,13 @@ export interface AuthUser {
   defaultCampus?: '良乡校区' | '中关村校区'
 }
 
+export interface AdminUser extends AuthUser {
+  createdAt: string
+  shopCount: number
+  itemCount: number
+  commentCount: number
+}
+
 const state = reactive({
   user: null as AuthUser | null,
   loading: false,
@@ -68,6 +75,28 @@ async function logout() {
   state.user = null
 }
 
+async function adminFetchUsers() {
+  const response = await fetch('/api/admin/users')
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'admin required' })) as { error?: string }
+    throw new Error(data.error || 'admin required')
+  }
+  return response.json() as Promise<{ users: AdminUser[] }>
+}
+
+async function adminUpdateUser(userId: number, payload: Partial<Pick<AuthUser, 'nickname' | 'role' | 'defaultCampus'>>) {
+  const response = await fetch('/api/admin/users', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ userId, ...payload })
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'update user failed' })) as { error?: string }
+    throw new Error(data.error || 'update user failed')
+  }
+  if (state.user?.id === userId) await loadMe()
+}
+
 function requireLogin() {
   if (state.user) return true
   state.authModal = true
@@ -92,6 +121,8 @@ export function useAuthStore() {
     login,
     updateProfile,
     logout,
-    requireLogin
+    requireLogin,
+    adminFetchUsers,
+    adminUpdateUser
   }
 }
