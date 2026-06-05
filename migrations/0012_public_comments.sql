@@ -1,0 +1,1 @@
+ALTER TABLE comments ADD COLUMN is_public_comment INTEGER NOT NULL DEFAULT 1;

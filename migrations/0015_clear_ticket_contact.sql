@@ -1,0 +1,1 @@
+UPDATE tickets SET contact = '';

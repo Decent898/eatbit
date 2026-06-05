@@ -1,0 +1,9 @@
+name = "bit-food-forum"
+compatibility_date = "2026-05-24"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "eatbit"
+database_id = "feec231b-1a85-4ddb-b7a5-c8ae56ff2364"
+migrations_dir = "migrations"
