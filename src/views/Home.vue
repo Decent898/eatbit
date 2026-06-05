@@ -44,6 +44,8 @@ const aiState = reactive({
   mood: '',
   loading: false,
   source: '',
+  summary: '',
+  model: '',
   results: [] as Array<{
     itemId: string
     shopId: string
@@ -280,6 +282,8 @@ async function askAi() {
   aiState.loading = true
   aiState.results = []
   aiState.source = ''
+  aiState.summary = ''
+  aiState.model = ''
   try {
     const response = await fetch('/api/ai/recommend', {
       method: 'POST',
@@ -293,9 +297,16 @@ async function askAi() {
       })
     })
     if (!response.ok) throw new Error('AI 推荐失败')
-    const data = await response.json() as { recommendations: typeof aiState.results; source: string }
+    const data = await response.json() as {
+      recommendations: typeof aiState.results
+      source: string
+      summary?: string
+      model?: string
+    }
     aiState.results = data.recommendations
     aiState.source = data.source
+    aiState.summary = data.summary ?? ''
+    aiState.model = data.model ?? ''
     if (aiState.results.length === 0) {
       window.$message.warning('当前范围里还没有可推荐的菜品')
     } else {
@@ -361,6 +372,12 @@ async function askAi() {
                 <n-tag :type="aiState.source === 'workers-ai' ? 'success' : 'warning'" round>
                   {{ aiState.source === 'workers-ai' ? 'Cloudflare Workers AI 推荐' : '评分规则推荐' }}
                 </n-tag>
+                <n-card v-if="aiState.summary" class="ai-summary-card" size="small">
+                  <n-space vertical size="small">
+                    <div class="muted">综合评价 · {{ aiState.model || 'AI 模型' }}</div>
+                    <div>{{ aiState.summary }}</div>
+                  </n-space>
+                </n-card>
                 <n-card v-for="entry in aiState.results" :key="entry.itemId" class="result-card" @click="goShop(entry.shopId)">
                   <n-space vertical>
                     <n-space justify="space-between" align="start">
@@ -728,6 +745,10 @@ async function askAi() {
   margin: 0 0 4px;
   color: #b01f24;
   font-size: 20px;
+}
+
+.ai-summary-card {
+  background: rgba(176, 31, 36, 0.04);
 }
 
 .today-submit {
