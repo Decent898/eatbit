@@ -53,6 +53,25 @@ async function login(email: string, nickname: string) {
   }
 }
 
+async function adminLogin(account: string, password: string) {
+  state.loading = true
+  try {
+    const response = await fetch('/api/auth/admin-login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ account, password })
+    })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: 'admin login failed' })) as { error?: string }
+      throw new Error(data.error || 'admin login failed')
+    }
+    const data = await response.json() as { user: AuthUser }
+    state.user = data.user
+  } finally {
+    state.loading = false
+  }
+}
+
 async function updateProfile(nickname: string, closeModal = true, defaultCampus?: '良乡校区' | '中关村校区') {
   state.loading = true
   try {
@@ -119,6 +138,7 @@ export function useAuthStore() {
     }),
     loadMe,
     login,
+    adminLogin,
     updateProfile,
     logout,
     requireLogin,

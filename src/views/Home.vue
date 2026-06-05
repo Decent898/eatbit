@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import AdminPanelSettingsOutlined from '@vicons/material/AdminPanelSettingsOutlined'
 import SearchOutlined from '@vicons/material/SearchOutlined'
 import TodayOutlined from '@vicons/material/TodayOutlined'
 import CasinoOutlined from '@vicons/material/CasinoOutlined'
@@ -556,12 +555,6 @@ function rollDice() {
           </n-card>
         </n-tab-pane>
       </n-tabs>
-
-      <n-button class="float-actions" circle size="large" @click="router.push('/admin/canteens')">
-        <template #icon>
-          <n-icon :component="AdminPanelSettingsOutlined" />
-        </template>
-      </n-button>
     </n-space>
   </div>
 </template>
@@ -613,12 +606,6 @@ function rollDice() {
   color: var(--primary-color);
   font-size: 18px;
   font-weight: 800;
-}
-
-.float-actions {
-  position: fixed;
-  right: 4.2vw;
-  bottom: 4.2vw;
 }
 
 .today-submit {

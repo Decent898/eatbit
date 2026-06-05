@@ -22,6 +22,7 @@ const editShopModal = ref(false)
 const editItemModal = ref(false)
 const editUserModal = ref(false)
 
+const adminLoginForm = reactive({ account: '', password: '' })
 const areaForm = reactive({ id: '', name: '', campus: '良乡校区' as Campus, kind: '食堂' as AreaKind, description: '' })
 const shopForm = reactive({ id: '', name: '', description: '' })
 const itemForm = reactive({ id: '', name: '', price: '', description: '' })
@@ -93,8 +94,29 @@ async function refreshAdminData() {
 
 function requireAdmin() {
   if (auth.isAdmin.value) return true
-  if (!auth.user.value) auth.authModal.value = true
+  window.$message.warning('请先用管理员账号登录后台')
   return false
+}
+
+async function submitAdminLogin() {
+  const account = adminLoginForm.account.trim()
+  if (!account || !adminLoginForm.password) {
+    window.$message.warning('请输入管理员账号和后台密码')
+    return
+  }
+  try {
+    await auth.adminLogin(account, adminLoginForm.password)
+    adminLoginForm.password = ''
+    window.$message.success('管理员登录成功')
+    await refreshAdminData()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '管理员登录失败'
+    if (message.includes('not configured')) {
+      window.$message.error('后台密码还没有配置，请先在 Cloudflare 设置 ADMIN_PASSWORD')
+    } else {
+      window.$message.error('管理员账号或密码不正确')
+    }
+  }
 }
 
 function openAreaEdit(area: { id: string; name: string; campus: Campus; kind: AreaKind; description: string }) {
@@ -358,17 +380,37 @@ onMounted(async () => {
 
 <template>
   <div class="admin-page">
-    <n-result
+    <n-card
       v-if="!auth.isAdmin.value"
-      status="403"
-      title="需要管理员权限"
-      description="这个后台用于集中管理 eat.bitdate.date 的区域、店面、菜品、评论、工单和用户。"
+      class="admin-login-card"
+      title="管理员后台登录"
     >
-      <template #footer>
-        <n-button v-if="!auth.user.value" type="primary" @click="auth.authModal.value = true">登录</n-button>
-        <n-button v-else @click="router.push('/home')">回首页</n-button>
-      </template>
-    </n-result>
+      <n-space vertical size="large">
+        <n-alert type="info" :show-icon="false">
+          后台入口独立于普通网页登录。账号填写管理员邮箱或昵称，密码填写后台密码。
+        </n-alert>
+        <FormField label="管理员账号">
+          <n-input
+            v-model:value="adminLoginForm.account"
+            autocomplete="username"
+            @keyup.enter="submitAdminLogin"
+          />
+        </FormField>
+        <FormField label="后台密码">
+          <n-input
+            v-model:value="adminLoginForm.password"
+            type="password"
+            show-password-on="click"
+            autocomplete="current-password"
+            @keyup.enter="submitAdminLogin"
+          />
+        </FormField>
+        <n-space justify="space-between" align="center">
+          <n-button @click="router.push('/home')">回到网站</n-button>
+          <n-button type="primary" :loading="auth.loading.value" @click="submitAdminLogin">进入后台</n-button>
+        </n-space>
+      </n-space>
+    </n-card>
 
     <n-space v-else vertical size="large">
       <n-card>
@@ -493,6 +535,11 @@ onMounted(async () => {
 .admin-page {
   width: min(100%, 1180px);
   margin: auto;
+}
+
+.admin-login-card {
+  max-width: 460px;
+  margin: 56px auto;
 }
 
 .admin-title {

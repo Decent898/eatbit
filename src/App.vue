@@ -5,7 +5,6 @@ import { darkTheme, lightTheme, NIcon, type MenuOption } from 'naive-ui'
 import MenuRound from '@vicons/material/MenuRound'
 import HomeOutlined from '@vicons/material/HomeOutlined'
 import RestaurantOutlined from '@vicons/material/RestaurantOutlined'
-import AdminPanelSettingsOutlined from '@vicons/material/AdminPanelSettingsOutlined'
 import RefreshOutlined from '@vicons/material/RefreshOutlined'
 import PersonOutlineOutlined from '@vicons/material/PersonOutlineOutlined'
 import DarkModeOutlined from '@vicons/material/DarkModeOutlined'
@@ -34,9 +33,7 @@ const menuOptions: MenuOption[] = [
   { label: '首页', key: '/home', icon: renderIcon(HomeOutlined) },
   { label: '店面发现', key: '/home?tab=search', icon: renderIcon(RestaurantOutlined) },
   { label: '个人中心', key: '/profile', icon: renderIcon(PersonOutlineOutlined) },
-  { label: '问题反馈', key: '/feedback', icon: renderIcon(FeedbackOutlined) },
-  { label: '管理员后台', key: '/admin', icon: renderIcon(AdminPanelSettingsOutlined) },
-  { label: '食堂区管理', key: '/admin/canteens', icon: renderIcon(AdminPanelSettingsOutlined) }
+  { label: '问题反馈', key: '/feedback', icon: renderIcon(FeedbackOutlined) }
 ]
 
 function handleMenu(key: string) {
