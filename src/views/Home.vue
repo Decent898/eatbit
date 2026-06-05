@@ -37,6 +37,26 @@ const diceState = reactive({
   rolling: false,
   resultItemId: ''
 })
+const aiState = reactive({
+  areaIds: [] as string[],
+  preference: '',
+  budget: '',
+  mood: '',
+  loading: false,
+  source: '',
+  results: [] as Array<{
+    itemId: string
+    shopId: string
+    itemName: string
+    shopName: string
+    areaName: string
+    campus: string
+    price: string
+    score: number
+    commentCount: number
+    reason: string
+  }>
+})
 const preferredCampus = computed<Campus>(() => auth.user.value?.defaultCampus ?? '良乡校区')
 
 watch(
@@ -255,6 +275,38 @@ function rollDice() {
     diceState.rolling = false
   }, 760)
 }
+
+async function askAi() {
+  aiState.loading = true
+  aiState.results = []
+  aiState.source = ''
+  try {
+    const response = await fetch('/api/ai/recommend', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        campus: filters.campus === '全部' ? undefined : filters.campus,
+        areaIds: aiState.areaIds,
+        preference: aiState.preference,
+        budget: aiState.budget,
+        mood: aiState.mood
+      })
+    })
+    if (!response.ok) throw new Error('AI 推荐失败')
+    const data = await response.json() as { recommendations: typeof aiState.results; source: string }
+    aiState.results = data.recommendations
+    aiState.source = data.source
+    if (aiState.results.length === 0) {
+      window.$message.warning('当前范围里还没有可推荐的菜品')
+    } else {
+      window.$message.success(data.source === 'workers-ai' ? 'AI 已给出推荐' : '已按现有评分给出推荐')
+    }
+  } catch (error) {
+    window.$message.error(error instanceof Error ? error.message : 'AI 推荐失败')
+  } finally {
+    aiState.loading = false
+  }
+}
 </script>
 
 <template>
@@ -276,6 +328,60 @@ function rollDice() {
       </n-card>
 
       <n-tabs v-model:value="activeTab" type="segment" animated class="home-tabs">
+        <n-tab-pane name="ai" tab="问AI">
+          <n-card class="ai-card">
+            <n-space vertical size="large">
+              <div>
+                <p class="dice-kicker">AI 问吃什么</p>
+                <h2 class="ai-title">告诉我你现在想吃什么，我从校内真实店面里挑。</h2>
+                <div class="muted">会自动排除关门店铺和下架菜品；AI 不可用时，会按评分和评价数兜底推荐。</div>
+              </div>
+
+              <FormField label="候选区域" example="可不选；不选时按当前校区推荐">
+                <n-select v-model:value="aiState.areaIds" multiple filterable clearable :options="areaOptions" />
+              </FormField>
+              <FormField label="想吃什么" example="比如：热乎一点、不要太辣、想吃面、适合带走">
+                <n-input v-model:value="aiState.preference" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" />
+              </FormField>
+              <n-grid cols="1 s:2" responsive="screen" :x-gap="12" :y-gap="12">
+                <n-grid-item>
+                  <FormField label="预算" example="比如：15以内、20左右、随意">
+                    <n-input v-model:value="aiState.budget" />
+                  </FormField>
+                </n-grid-item>
+                <n-grid-item>
+                  <FormField label="状态" example="比如：赶时间、想坐下吃、想吃清淡">
+                    <n-input v-model:value="aiState.mood" />
+                  </FormField>
+                </n-grid-item>
+              </n-grid>
+              <n-button type="primary" size="large" block :loading="aiState.loading" @click="askAi">问问 AI 今天吃什么</n-button>
+
+              <n-space v-if="aiState.results.length" vertical>
+                <n-tag :type="aiState.source === 'workers-ai' ? 'success' : 'warning'" round>
+                  {{ aiState.source === 'workers-ai' ? 'Cloudflare Workers AI 推荐' : '评分规则推荐' }}
+                </n-tag>
+                <n-card v-for="entry in aiState.results" :key="entry.itemId" class="result-card" @click="goShop(entry.shopId)">
+                  <n-space vertical>
+                    <n-space justify="space-between" align="start">
+                      <div>
+                        <h3 class="ai-result-title">{{ entry.itemName }}</h3>
+                        <div class="muted">{{ entry.shopName }} · {{ entry.areaName }} · {{ entry.campus }}</div>
+                      </div>
+                      <div class="rank-score">{{ entry.score ? entry.score.toFixed(1) : '新' }}</div>
+                    </n-space>
+                    <div>{{ entry.reason }}</div>
+                    <n-space>
+                      <n-tag round>{{ entry.price || '价格待补' }}</n-tag>
+                      <n-tag round type="info">{{ entry.commentCount }} 评</n-tag>
+                    </n-space>
+                  </n-space>
+                </n-card>
+              </n-space>
+            </n-space>
+          </n-card>
+        </n-tab-pane>
+
         <n-tab-pane name="dice" tab="骰一下">
           <n-card class="dice-card" content-style="padding: 0;">
             <section class="dice-panel">
@@ -606,6 +712,22 @@ function rollDice() {
   color: var(--primary-color);
   font-size: 18px;
   font-weight: 800;
+}
+
+.ai-card {
+  border-color: rgba(176, 31, 36, 0.22);
+}
+
+.ai-title {
+  margin: 2px 0 6px;
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+.ai-result-title {
+  margin: 0 0 4px;
+  color: #b01f24;
+  font-size: 20px;
 }
 
 .today-submit {

@@ -1,6 +1,9 @@
 export interface Env {
   DB: D1Database
   ADMIN_PASSWORD?: string
+  AI?: {
+    run(model: string, input: unknown): Promise<unknown>
+  }
 }
 
 export interface SessionUser {
