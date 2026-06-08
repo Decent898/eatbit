@@ -1,0 +1,57 @@
+<view class="page dice-page">
+  <view class="dice-hero">
+    <view>
+      <view class="dice-kicker">今天吃什么？</view>
+      <view class="dice-title">选几个区域，让骰子替你做决定</view>
+    </view>
+    <view class="dice-face {{rolling ? 'rolling' : ''}}" bindtap="roll">骰</view>
+  </view>
+
+  <view class="van-card padded">
+    <view class="between">
+      <view>
+        <view class="title">候选校区</view>
+        <view class="muted">不选区域时，按当前校区范围随机</view>
+      </view>
+      <van-button round size="small" plain type="primary" bindtap="clearAreas">清空</van-button>
+    </view>
+    <scroll-view class="campus-scroll" scroll-x enable-flex show-scrollbar="{{false}}">
+      <view class="campus-row">
+        <view class="campus {{campus === '全部' ? 'active' : ''}}" data-campus="全部" bindtap="setCampus">全部</view>
+        <view class="campus {{campus === '良乡校区' ? 'active' : ''}}" data-campus="良乡校区" bindtap="setCampus">良乡</view>
+        <view class="campus {{campus === '中关村校区' ? 'active' : ''}}" data-campus="中关村校区" bindtap="setCampus">中关村</view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="van-card padded">
+    <view class="title">候选区域</view>
+    <scroll-view class="chip-scroll" scroll-x enable-flex show-scrollbar="{{false}}">
+      <view class="chip-row">
+        <view wx:for="{{areaOptions}}" wx:key="id" class="area-chip {{item.checked ? 'active' : ''}}" data-id="{{item.id}}" bindtap="toggleArea">{{item.name}}</view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="dice-actions">
+    <view class="muted">{{poolCount}} 个可选菜品</view>
+    <van-button round type="primary" icon="replay" loading="{{rolling}}" bindtap="roll">骰一下</van-button>
+  </view>
+
+  <view wx:if="{{result}}" class="van-card result-card" bindtap="goResult">
+    <van-cell title="今天就吃" label="{{result.shop.name}} · {{result.area.name}}" is-link>
+      <view slot="right-icon" class="result-arrow">
+        <van-icon name="arrow" color="#9aa8a1" />
+      </view>
+    </van-cell>
+    <view class="result-body">
+      <view class="result-name">{{result.item.name}}</view>
+      <view class="van-tags result-tags">
+        <van-tag plain type="primary" round>价格 {{result.item.price || '待补'}}</van-tag>
+        <van-tag plain type="primary" round>评分 {{result.scoreText}}</van-tag>
+        <van-tag plain type="primary" round>{{result.commentCount}} 评</van-tag>
+      </view>
+    </view>
+  </view>
+  <van-empty wx:else description="还没开骰，先选几个区域试试手气。" />
+</view>

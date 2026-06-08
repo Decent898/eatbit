@@ -1,0 +1,27 @@
+.padded {
+  padding: 24rpx;
+}
+
+.area-card {
+  overflow: hidden;
+}
+
+.area-title {
+  color: #17201c !important;
+  font-size: 34rpx !important;
+  font-weight: 900 !important;
+}
+
+.area-right {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.area-body {
+  padding: 0 24rpx 22rpx;
+}
+
+.area-meta {
+  margin-top: 14rpx;
+}

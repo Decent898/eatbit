@@ -1,0 +1,63 @@
+.padded {
+  padding: 24rpx;
+}
+
+.field-label {
+  margin: 22rpx 0 10rpx;
+  color: #17201c;
+  font-weight: 900;
+}
+
+.profile-campus {
+  margin-top: 12rpx;
+}
+
+.profile-actions {
+  margin-top: 22rpx;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14rpx;
+  margin: 22rpx 0 8rpx;
+}
+
+.stat {
+  padding: 22rpx;
+  border: 1rpx solid #e4ece7;
+  border-radius: 18rpx;
+  background: #f8fbf9;
+  text-align: center;
+}
+
+.meal-card {
+  padding: 22rpx 24rpx;
+}
+
+.date {
+  margin-bottom: 12rpx;
+  color: #17201c;
+  font-size: 30rpx;
+  font-weight: 900;
+}
+
+.meal-line {
+  display: grid;
+  grid-template-columns: 86rpx 1fr;
+  gap: 14rpx;
+  padding: 14rpx 0;
+  border-top: 1rpx solid #eef2ef;
+  white-space: pre-line;
+  line-height: 1.55;
+}
+
+.meal-line text {
+  color: #18a058;
+  font-weight: 900;
+}
+
+.meal-line view {
+  color: #17201c;
+  background: transparent;
+}

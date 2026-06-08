@@ -1,7 +1,9 @@
 {
   "name": "bit-food-forum",
-  "private": true,
+  "private": false,
   "version": "0.1.0",
+  "license": "MIT",
+  "description": "Open-source BIT campus food forum for web and WeChat mini program.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,7 +23,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.4",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5",
+    "vite": "6.3.5",
     "vue-tsc": "^2.2.10",
     "wrangler": "^4.20.5"
   }

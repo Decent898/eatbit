@@ -1,0 +1,26 @@
+.padded {
+  padding: 24rpx;
+}
+
+.field {
+  margin-top: 22rpx;
+}
+
+.field-label {
+  margin-bottom: 8rpx;
+  color: #17201c;
+  font-weight: 900;
+}
+
+.field-example {
+  margin-bottom: 12rpx;
+  color: #718078;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.submit-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 26rpx;
+}

@@ -3,3 +3,25 @@ dist/
 *.log
 output/
 .wrangler/
+
+# Env and local secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# WeChat Mini Program local/build artifacts
+miniprogram/node_modules/
+miniprogram/miniprogram_npm/
+miniprogram/project.private.config.json
+miniprogram/.git/
+miniprogram/.git.backup-for-open-source/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
