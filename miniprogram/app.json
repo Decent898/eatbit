@@ -18,15 +18,15 @@
     "backgroundTextStyle": "dark"
   },
   "usingComponents": {
-    "van-button": "@vant/weapp/button/index",
-    "van-cell": "@vant/weapp/cell/index",
-    "van-cell-group": "@vant/weapp/cell-group/index",
-    "van-tag": "@vant/weapp/tag/index",
-    "van-empty": "@vant/weapp/empty/index",
-    "van-popup": "@vant/weapp/popup/index",
-    "van-rate": "@vant/weapp/rate/index",
-    "van-divider": "@vant/weapp/divider/index",
-    "van-icon": "@vant/weapp/icon/index"
+    "van-button": "@vant/weapp/dist/button/index",
+    "van-cell": "@vant/weapp/dist/cell/index",
+    "van-cell-group": "@vant/weapp/dist/cell-group/index",
+    "van-tag": "@vant/weapp/dist/tag/index",
+    "van-empty": "@vant/weapp/dist/empty/index",
+    "van-popup": "@vant/weapp/dist/popup/index",
+    "van-rate": "@vant/weapp/dist/rate/index",
+    "van-divider": "@vant/weapp/dist/divider/index",
+    "van-icon": "@vant/weapp/dist/icon/index"
   },
   "tabBar": {
     "color": "#6f7975",
