@@ -1,0 +1,51 @@
+<view class="page">
+  <view class="van-card padded">
+    <view class="title">{{user ? '个人中心' : '登录'}}</view>
+    <view class="muted">可以只输入昵称或邮箱登录；如果昵称重复，就需要补充邮箱。</view>
+    <view class="field-label">昵称</view>
+    <input class="input" data-key="nickname" value="{{nickname}}" bindinput="bindInput" placeholder="输入昵称" />
+    <view class="field-label">邮箱</view>
+    <input class="input" data-key="email" value="{{email}}" bindinput="bindInput" placeholder="输入邮箱" />
+    <block wx:if="{{user}}">
+      <view class="field-label">默认校区</view>
+      <scroll-view class="campus-scroll profile-campus" scroll-x enable-flex show-scrollbar="{{false}}">
+        <view class="campus-row">
+          <view class="campus {{defaultCampus === '良乡校区' ? 'active' : ''}}" data-value="良乡校区" bindtap="setCampus">良乡</view>
+          <view class="campus {{defaultCampus === '中关村校区' ? 'active' : ''}}" data-value="中关村校区" bindtap="setCampus">中关村</view>
+        </view>
+      </scroll-view>
+    </block>
+    <view class="button-row profile-actions">
+      <van-button round type="primary" bindtap="submitAuth">{{user ? '保存设置' : '登录'}}</van-button>
+      <van-button wx:if="{{user}}" round plain type="default" bindtap="logout">退出登录</van-button>
+    </view>
+  </view>
+
+  <block wx:if="{{user}}">
+    <view class="van-card padded">
+      <view class="title">我的吃饭统计</view>
+      <view class="stat-grid">
+        <view class="stat">
+          <view class="score">{{stats.total}}</view>
+          <view class="muted">记录次数</view>
+        </view>
+        <view class="stat">
+          <view class="score">{{stats.average}}</view>
+          <view class="muted">平均评分</view>
+        </view>
+      </view>
+      <van-cell title="常去店面" value="{{stats.favoriteShop}}" />
+      <van-cell title="常吃菜品" value="{{stats.favoriteItem}}" />
+    </view>
+
+    <view class="section-title">最近一周早中晚饭表</view>
+    <van-empty wx:if="{{mealRows.length === 0}}" description="还没有吃饭记录" />
+    <view wx:for="{{mealRows}}" wx:key="date" class="van-card meal-card">
+      <view class="date">{{item.date}}</view>
+      <view class="meal-line"><text>早餐</text><view>{{item.breakfastText}}</view></view>
+      <view class="meal-line"><text>午餐</text><view>{{item.lunchText}}</view></view>
+      <view class="meal-line"><text>晚餐</text><view>{{item.dinnerText}}</view></view>
+      <view class="meal-line"><text>其他</text><view>{{item.otherText}}</view></view>
+    </view>
+  </block>
+</view>

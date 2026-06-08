@@ -1,0 +1,67 @@
+<view class="page">
+  <view class="hero">
+    <view class="hero-title">今天吃了什么</view>
+    <view class="hero-subtitle">记录今天在哪吃、吃了什么，也可以同步成公开评价。</view>
+  </view>
+
+  <view class="van-card">
+    <van-cell-group title="基础信息">
+      <picker mode="selector" range="{{areaOptions}}" range-key="name" bindchange="onArea">
+        <van-cell title="今天在哪吃" value="{{selectedAreaName || '选择区域'}}" is-link />
+      </picker>
+      <picker mode="selector" range="{{shopOptions}}" range-key="name" bindchange="onShop">
+        <van-cell title="店面" value="{{selectedShopName || '选择已有店面或新增'}}" is-link />
+      </picker>
+      <view wx:if="{{isAddingShop}}" class="inline-form">
+        <view class="field-label">新店面名称</view>
+        <input class="input" data-key="newShopName" value="{{newShopName}}" bindinput="bindInput" placeholder="例如：学服一层麻辣烫" />
+      </view>
+      <picker mode="selector" range="{{itemOptions}}" range-key="name" bindchange="onItem">
+        <van-cell title="菜品" value="{{selectedItemName || '选择已有菜品或新增'}}" is-link />
+      </picker>
+      <view wx:if="{{isAddingItem}}" class="inline-form">
+        <view class="field-label">新菜品名称</view>
+        <input class="input" data-key="newItemName" value="{{newItemName}}" bindinput="bindInput" placeholder="例如：番茄牛腩饭" />
+        <view class="field-label">新菜品价格</view>
+        <input class="input" data-key="newItemPrice" value="{{newItemPrice}}" bindinput="bindInput" placeholder="例如：12、16+" />
+      </view>
+    </van-cell-group>
+  </view>
+
+  <view class="van-card padded">
+    <view class="title">餐次</view>
+    <scroll-view class="chip-scroll compact-scroll" scroll-x enable-flex show-scrollbar="{{false}}">
+      <view class="chip-row">
+        <text wx:for="{{mealSlots}}" wx:key="*this" class="meal {{mealSlot === item ? 'active' : ''}}" data-value="{{item}}" bindtap="setMealSlot">{{item}}</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="van-card padded">
+    <view class="title">同步到公开评价</view>
+    <view class="segmented">
+      <view class="{{syncComment ? 'active' : ''}}" data-value="true" bindtap="setSync">同步</view>
+      <view class="{{!syncComment ? 'active' : ''}}" data-value="false" bindtap="setSync">只记录</view>
+    </view>
+
+    <block wx:if="{{syncComment}}">
+      <view class="field-label">评分</view>
+      <van-rate value="{{score}}" bind:change="setScoreByRate" />
+      <textarea class="textarea comment-area" data-key="text" value="{{text}}" bindinput="bindInput" placeholder="写一句评价，口味、价格、排队、份量都可以" />
+      <view class="field-label">图片</view>
+      <image wx:if="{{image}}" class="form-image" mode="aspectFill" src="{{image}}" />
+      <view class="button-row left image-actions">
+        <van-button round size="small" plain type="primary" loading="{{imageUploading}}" bindtap="pickImage">{{image ? '更换图片' : '上传图片'}}</van-button>
+        <van-button wx:if="{{image}}" round size="small" plain type="default" bindtap="removeImage">移除</van-button>
+      </view>
+      <view class="segmented">
+        <view class="{{isAnonymous ? 'active' : ''}}" data-value="true" bindtap="setAnonymous">匿名</view>
+        <view class="{{!isAnonymous ? 'active' : ''}}" data-value="false" bindtap="setAnonymous">显示昵称</view>
+      </view>
+    </block>
+  </view>
+
+  <view class="submit-wrap">
+    <van-button round type="primary" size="large" custom-class="submit-button" bindtap="submit">记录今天</van-button>
+  </view>
+</view>

@@ -1,0 +1,83 @@
+.padded {
+  padding: 24rpx;
+}
+
+.dice-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 18rpx;
+  align-items: center;
+  margin-bottom: 22rpx;
+  padding: 36rpx 30rpx;
+  border: 1rpx solid #f4e2c3;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #fffaf0, #ffffff 62%);
+  box-shadow: 0 10rpx 28rpx rgba(184, 111, 28, 0.06);
+}
+
+.dice-kicker {
+  color: #18a058;
+  font-weight: 900;
+}
+
+.dice-title {
+  margin-top: 10rpx;
+  color: #17201c;
+  font-size: 40rpx;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.dice-face {
+  width: 128rpx;
+  height: 128rpx;
+  flex: 0 0 128rpx;
+  border-radius: 32rpx;
+  color: #ffffff;
+  background: linear-gradient(135deg, #ff7a59, #ffb43b);
+  text-align: center;
+  line-height: 128rpx;
+  font-size: 44rpx;
+  font-weight: 900;
+  box-shadow: 0 12rpx 24rpx rgba(255, 122, 89, .22);
+}
+
+.rolling {
+  animation: roll .72s ease-in-out infinite;
+}
+
+@keyframes roll {
+  0% { transform: rotate(0deg) scale(1); }
+  45% { transform: rotate(150deg) scale(1.12); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.dice-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22rpx;
+  margin: 28rpx 0;
+}
+
+.result-card {
+  overflow: hidden;
+  border-color: rgba(24, 160, 88, .32);
+}
+
+.result-arrow {
+  display: flex;
+  align-items: center;
+}
+
+.result-body {
+  padding: 0 24rpx 24rpx;
+}
+
+.result-name {
+  margin: 2rpx 0 16rpx;
+  color: #17201c;
+  font-size: 42rpx;
+  font-weight: 900;
+  line-height: 1.25;
+}

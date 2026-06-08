@@ -1,0 +1,81 @@
+<view class="page">
+  <view class="van-card padded">
+    <view class="title">搜索店面和菜品</view>
+    <input class="input search-input" placeholder="例如：煎饼、麻辣香锅、学服" value="{{keyword}}" bindinput="onKeyword" />
+    <scroll-view class="campus-scroll" scroll-x enable-flex show-scrollbar="{{false}}">
+      <view class="campus-row">
+        <view class="campus {{campus === '全部' ? 'active' : ''}}" data-campus="全部" bindtap="setCampus">全部</view>
+        <view class="campus {{campus === '良乡校区' ? 'active' : ''}}" data-campus="良乡校区" bindtap="setCampus">良乡</view>
+        <view class="campus {{campus === '中关村校区' ? 'active' : ''}}" data-campus="中关村校区" bindtap="setCampus">中关村</view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <block wx:if="{{keyword}}">
+    <view class="section-title">店面结果</view>
+    <van-empty wx:if="{{shopResults.length === 0}}" description="没有找到店面" />
+    <view wx:for="{{shopResults}}" wx:key="*this" class="van-card result-card" data-id="{{item.shop.id}}" bindtap="goShop">
+      <van-cell title="{{item.shop.name}}" label="{{item.area.campus}} · {{item.area.name}}" is-link title-class="result-title">
+        <view slot="right-icon" class="result-side">
+          <text class="score">{{item.score}}</text>
+          <van-icon name="arrow" color="#9aa8a1" />
+        </view>
+      </van-cell>
+      <view class="result-body">
+        <view class="van-tags">
+          <van-tag plain type="primary" round>{{item.commentCount}} 条评价</van-tag>
+          <van-tag plain type="primary" round>{{item.shop.items.length}} 个菜品</van-tag>
+          <van-tag wx:if="{{item.shop.isClosed}}" plain type="danger" round>已关门</van-tag>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-title">菜品结果</view>
+    <van-empty wx:if="{{itemResults.length === 0}}" description="没有找到菜品" />
+    <view wx:for="{{itemResults}}" wx:key="*this" class="van-card result-card" data-id="{{item.shop.id}}" bindtap="goShop">
+      <van-cell title="{{item.item.name}}" label="{{item.shop.name}} · {{item.area.name}}" is-link title-class="result-title">
+        <view slot="right-icon" class="result-side">
+          <text class="score">{{item.scoreText}}</text>
+          <van-icon name="arrow" color="#9aa8a1" />
+        </view>
+      </van-cell>
+      <view class="result-body">
+        <view class="van-tags">
+          <van-tag plain type="primary" round>价格 {{item.item.price || '待补'}}</van-tag>
+          <van-tag plain type="primary" round>{{item.commentCount}} 评</van-tag>
+          <van-tag wx:if="{{item.item.isOffShelf}}" plain type="danger" round>已下架</van-tag>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="section-title">菜品评分榜</view>
+  <view wx:for="{{itemScore}}" wx:key="*this" class="van-card rank-card" data-id="{{item.shop.id}}" bindtap="goShop">
+    <view class="rank-no">{{index + 1}}</view>
+    <view class="rank-main">
+      <view class="rank-title">{{item.item.name}}</view>
+      <view class="muted">{{item.shop.name}} · {{item.area.name}}</view>
+    </view>
+    <view class="score">{{item.score}}</view>
+  </view>
+
+  <view class="section-title">店铺评分榜</view>
+  <view wx:for="{{shopScore}}" wx:key="*this" class="van-card rank-card" data-id="{{item.shop.id}}" bindtap="goShop">
+    <view class="rank-no">{{index + 1}}</view>
+    <view class="rank-main">
+      <view class="rank-title">{{item.shop.name}}</view>
+      <view class="muted">{{item.area.campus}} · {{item.area.name}}</view>
+    </view>
+    <view class="score">{{item.score}}</view>
+  </view>
+
+  <view class="section-title">评价数榜</view>
+  <view wx:for="{{shopHeat}}" wx:key="*this" class="van-card rank-card" data-id="{{item.shop.id}}" bindtap="goShop">
+    <view class="rank-no">{{index + 1}}</view>
+    <view class="rank-main">
+      <view class="rank-title">{{item.shop.name}}</view>
+      <view class="muted">{{item.area.name}} · {{item.commentCount}} 条评价</view>
+    </view>
+    <view class="score">{{item.score}}</view>
+  </view>
+</view>

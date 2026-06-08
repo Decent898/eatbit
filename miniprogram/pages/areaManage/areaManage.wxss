@@ -1,0 +1,37 @@
+.padded {
+  padding: 24rpx;
+}
+
+.field {
+  margin-top: 22rpx;
+}
+
+.field-label {
+  margin-bottom: 8rpx;
+  color: #17201c;
+  font-weight: 900;
+}
+
+.field-example {
+  margin-bottom: 12rpx;
+  color: #718078;
+  font-size: 24rpx;
+}
+
+.actions {
+  margin-top: 24rpx;
+}
+
+.area-card {
+  overflow: hidden;
+}
+
+.area-title {
+  color: #17201c !important;
+  font-size: 32rpx !important;
+  font-weight: 900 !important;
+}
+
+.desc {
+  padding: 0 24rpx 22rpx;
+}

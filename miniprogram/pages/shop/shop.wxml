@@ -1,0 +1,114 @@
+<view class="page">
+  <van-empty wx:if="{{!shop && !loading}}" description="没有找到这个店面" />
+
+  <block wx:if="{{shop}}">
+    <view class="shop-cover-card">
+      <image wx:if="{{shop.image}}" class="shop-image" mode="aspectFill" src="{{shop.image}}" data-src="{{shop.image}}" bindtap="previewImage" />
+      <view class="shop-info">
+        <view class="van-tags">
+          <van-tag type="primary" plain round>{{area.campus}}</van-tag>
+          <van-tag type="primary" plain round>{{area.name}}</van-tag>
+          <van-tag wx:if="{{shop.isClosed}}" type="danger" plain round>已关门</van-tag>
+        </view>
+        <view class="shop-title-row">
+          <view class="shop-name">{{shop.name}}</view>
+          <view class="shop-score">{{shop.scoreText}}</view>
+        </view>
+        <view class="muted">所在区域：{{area.campus}} · {{area.name}} · {{area.kind}}</view>
+        <view wx:if="{{shop.description}}" class="muted desc">{{shop.description}}</view>
+        <view class="button-row left shop-actions">
+          <van-button round size="small" type="primary" bindtap="openCommentModal">写评价</van-button>
+          <van-button round size="small" plain type="primary" loading="{{imageUploading}}" bindtap="pickShopImage">{{shop.image ? '更换图片' : '上传图片'}}</van-button>
+          <van-button round size="small" plain type="default" bindtap="toggleShopStatus">{{shop.isClosed ? '恢复营业' : '标记关门'}}</van-button>
+          <view wx:if="{{shop.canDeleteShop}}" class="danger-dot" role="button" bindtap="deleteShop">×</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-title">菜品表</view>
+    <van-empty wx:if="{{shop.items.length === 0}}" description="还没有菜品" />
+    <view wx:for="{{shop.items}}" wx:key="id" class="van-card item-card">
+      <van-cell title="{{item.name}}" title-class="item-cell-title" value="{{item.isOffShelf ? '已下架' : ''}}" value-class="item-status" />
+      <view class="item-body">
+        <view class="item-stats">
+          <view class="stat-pill"><text>价格</text><strong>{{item.price || '待补'}}</strong></view>
+          <view class="stat-pill"><text>评分</text><strong>{{item.scoreText}}</strong></view>
+          <view class="stat-pill"><text>评论数</text><strong>{{item.commentCount}}</strong></view>
+        </view>
+        <view wx:if="{{item.description}}" class="muted item-desc">{{item.description}}</view>
+        <view class="button-row left item-action-row">
+          <van-button round size="small" plain type="primary" data-item-id="{{item.id}}" bindtap="openCommentModal">评价此菜品</van-button>
+          <van-button round size="mini" plain type="default" data-id="{{item.id}}" bindtap="toggleItemStatus">{{item.isOffShelf ? '恢复' : '下架'}}</van-button>
+          <view wx:if="{{item.canDelete}}" class="danger-dot" role="button" data-id="{{item.id}}" bindtap="deleteItem">×</view>
+        </view>
+      </view>
+    </view>
+    <view class="button-row">
+      <van-button round type="primary" icon="plus" bindtap="openItemModal">添加菜品</van-button>
+    </view>
+
+    <view class="section-title">评分留言</view>
+    <van-empty wx:if="{{shop.publicComments.length === 0}}" description="还没有评价" />
+    <view wx:for="{{shop.publicComments}}" wx:key="id" class="van-card comment-card">
+      <van-cell title="{{item.user}}" label="{{item.createTime}}" title-class="comment-user">
+        <view slot="right-icon" class="comment-side">
+          <van-tag wx:if="{{item.itemName}}" plain type="primary" round>{{item.itemName}}</van-tag>
+          <text class="comment-score">评分 {{item.score}}</text>
+          <view wx:if="{{item.canDelete}}" class="danger-dot" role="button" data-id="{{item.id}}" bindtap="deleteComment">×</view>
+        </view>
+      </van-cell>
+      <view class="comment-text">{{item.text}}</view>
+      <image wx:if="{{item.image}}" class="comment-image" mode="aspectFill" src="{{item.image}}" data-src="{{item.image}}" bindtap="previewImage" />
+    </view>
+  </block>
+
+  <van-popup show="{{itemModal}}" position="bottom" round custom-style="max-height: 86vh;" bind:close="closeItemModal">
+    <view class="sheet">
+      <view class="title">添加菜品</view>
+      <view class="field-label">菜品名称</view>
+      <input class="input" data-key="itemName" value="{{itemName}}" bindinput="bindInput" placeholder="例如：番茄牛腩饭" />
+      <view class="field-label">价格</view>
+      <input class="input" data-key="itemPrice" value="{{itemPrice}}" bindinput="bindInput" placeholder="例如：12、16+" />
+      <view class="button-row right sheet-actions">
+        <van-button round plain type="default" bindtap="closeItemModal">取消</van-button>
+        <van-button round type="primary" bindtap="submitItem">提交</van-button>
+      </view>
+    </view>
+  </van-popup>
+
+  <van-popup show="{{commentModal}}" position="bottom" round custom-style="max-height: 90vh;" bind:close="closeCommentModal">
+    <view class="sheet">
+      <view class="title">写评价</view>
+      <view class="field-label">引用菜品</view>
+      <picker mode="selector" range="{{shop.items}}" range-key="name" bindchange="setCommentItem">
+        <view class="select">{{commentItemId ? '已选择菜品' : '可选择引用菜品'}}</view>
+      </picker>
+      <view class="field-label">评分</view>
+      <van-rate value="{{commentScore}}" bind:change="setScoreByRate" />
+      <textarea class="textarea" data-key="commentText" value="{{commentText}}" bindinput="bindInput" placeholder="口味、价格、排队、份量，写一句就行" />
+      <view class="field-label">图片</view>
+      <image wx:if="{{commentImage}}" class="modal-image" mode="aspectFill" src="{{commentImage}}" />
+      <view class="button-row left image-actions">
+        <van-button round size="small" plain type="primary" loading="{{imageUploading}}" bindtap="pickCommentImage">{{commentImage ? '更换图片' : '上传图片'}}</van-button>
+        <van-button wx:if="{{commentImage}}" round size="small" plain type="default" bindtap="removeCommentImage">移除</van-button>
+      </view>
+      <view class="segmented">
+        <view class="{{isAnonymous ? 'active' : ''}}" data-value="true" bindtap="setAnonymous">匿名</view>
+        <view class="{{!isAnonymous ? 'active' : ''}}" data-value="false" bindtap="setAnonymous">显示昵称</view>
+      </view>
+      <view class="segmented">
+        <view class="{{isMealRecord ? 'active' : ''}}" data-value="true" bindtap="setMealRecord">计入今天</view>
+        <view class="{{!isMealRecord ? 'active' : ''}}" data-value="false" bindtap="setMealRecord">只发评价</view>
+      </view>
+      <scroll-view wx:if="{{isMealRecord}}" class="chip-scroll" scroll-x enable-flex show-scrollbar="{{false}}">
+        <view class="chip-row">
+          <text wx:for="{{mealSlots}}" wx:key="*this" class="meal {{mealSlot === item ? 'active' : ''}}" data-value="{{item}}" bindtap="setMealSlot">{{item}}</text>
+        </view>
+      </scroll-view>
+      <view class="button-row right sheet-actions">
+        <van-button round plain type="default" bindtap="closeCommentModal">取消</van-button>
+        <van-button round type="primary" bindtap="submitComment">发布</van-button>
+      </view>
+    </view>
+  </van-popup>
+</view>

@@ -1,0 +1,58 @@
+.padded {
+  padding: 24rpx;
+}
+
+.search-input {
+  margin-top: 18rpx;
+}
+
+.result-card {
+  overflow: hidden;
+}
+
+.result-title {
+  color: #17201c !important;
+  font-size: 32rpx !important;
+  font-weight: 900 !important;
+}
+
+.result-side {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.result-body {
+  padding: 0 24rpx 20rpx;
+}
+
+.rank-card {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 22rpx 24rpx;
+}
+
+.rank-no {
+  width: 56rpx;
+  height: 56rpx;
+  flex: 0 0 56rpx;
+  border-radius: 999rpx;
+  color: #ffffff;
+  background: #18a058;
+  text-align: center;
+  line-height: 56rpx;
+  font-weight: 900;
+}
+
+.rank-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.rank-title {
+  color: #17201c;
+  font-size: 31rpx;
+  font-weight: 900;
+  line-height: 1.35;
+}

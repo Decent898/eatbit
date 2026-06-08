@@ -1,0 +1,55 @@
+<view class="page">
+  <van-empty wx:if="{{!area && !loading}}" description="没有找到这个区域" />
+
+  <block wx:if="{{area}}">
+    <view class="van-card padded">
+      <view class="van-tags">
+        <van-tag type="primary" plain round>{{area.campus}}</van-tag>
+        <van-tag type="primary" plain round>{{area.kind}}</van-tag>
+      </view>
+      <view class="title area-name">{{area.name}}</view>
+      <view class="muted">{{area.description}}</view>
+      <view class="button-row left add-row">
+        <van-button round type="primary" icon="plus" bindtap="openAddShop">添加店面</van-button>
+      </view>
+    </view>
+
+    <view class="section-title">{{area.name}} 包含的店面</view>
+    <van-empty wx:if="{{areaShops.length === 0}}" description="这里还没有店面" />
+
+    <view wx:for="{{areaShops}}" wx:key="id" class="van-card shop-card" data-id="{{item.id}}" bindtap="goShop">
+      <van-cell title="{{item.name}}" is-link title-class="shop-title">
+        <view slot="right-icon" class="shop-right">
+          <view class="score">{{item.scoreText}}</view>
+          <van-icon name="arrow" color="#9aa8a1" />
+        </view>
+      </van-cell>
+      <view class="shop-body">
+        <view class="muted">{{item.commentCount}} 条评价 · {{item.itemCount}} 个菜品</view>
+        <view class="van-tags tag-row">
+          <van-tag wx:if="{{item.isClosed}}" type="danger" plain round>已关门</van-tag>
+          <van-tag wx:for="{{item.tags}}" wx:key="*this" type="primary" plain round>{{item}}</van-tag>
+        </view>
+        <view wx:if="{{item.description}}" class="muted desc">{{item.description}}</view>
+      </view>
+    </view>
+  </block>
+
+  <van-popup show="{{shopModal}}" position="bottom" round bind:close="closeAddShop">
+    <view class="sheet">
+      <view class="title">添加店面</view>
+      <view class="field-label">店面名称</view>
+      <input class="input" placeholder="例如：学服煎饼摊、北三铁板窗口" value="{{shopName}}" bindinput="onShopName" />
+      <view class="field-label">店铺图片</view>
+      <image wx:if="{{shopImage}}" class="modal-image" mode="aspectFill" src="{{shopImage}}" />
+      <view class="button-row left image-actions">
+        <van-button round size="small" plain type="primary" loading="{{imageUploading}}" bindtap="pickShopImage">{{shopImage ? '更换图片' : '上传图片'}}</van-button>
+        <van-button wx:if="{{shopImage}}" round size="small" plain type="default" bindtap="removeShopImage">移除</van-button>
+      </view>
+      <view class="button-row right sheet-actions">
+        <van-button round plain type="default" bindtap="closeAddShop">取消</van-button>
+        <van-button round type="primary" bindtap="submitShop">提交</van-button>
+      </view>
+    </view>
+  </van-popup>
+</view>

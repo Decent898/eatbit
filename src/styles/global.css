@@ -1,0 +1,164 @@
+:root {
+  --primary-color: #20835f;
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f3f5f7;
+}
+
+#app,
+body {
+  font-family: "Noto Serif SC", "Source Han Serif CN", "Microsoft YaHei", serif;
+  font-size: 16px;
+}
+
+.container {
+  width: min(100%, 860px);
+  margin: auto;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--primary-color);
+}
+
+.brand-button {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.app-content {
+  min-height: 82vh;
+  padding: 12px;
+}
+
+.app-footer {
+  min-height: 90px;
+  padding: 20px 12px 28px;
+  text-align: center;
+  color: var(--text-color-3);
+}
+
+.page-container {
+  width: min(100%, 860px);
+  margin: auto;
+}
+
+.cover-card {
+  overflow: hidden;
+  border-radius: 11px;
+}
+
+.cover {
+  min-height: 220px;
+  padding: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  color: #fff;
+  background:
+    linear-gradient(90deg, rgba(22, 86, 64, 0.94), rgba(42, 111, 151, 0.82)),
+    url("https://images.unsplash.com/photo-1543352634-a1c51d9f1fa7?auto=format&fit=crop&w=1600&q=80") center/cover;
+}
+
+.cover h1 {
+  max-width: 680px;
+  margin: 8px 0 0;
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 1.18;
+}
+
+.cover p {
+  margin: 0;
+  opacity: 0.82;
+}
+
+.muted {
+  color: var(--text-color-3);
+}
+
+.score-text {
+  color: var(--primary-color);
+  font-weight: 800;
+}
+
+.shop-card {
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.shop-card:hover {
+  transform: translateY(-2px);
+}
+
+.danger-menu-item {
+  color: #d03050;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 680px) {
+  body,
+  #app {
+    font-size: 15px;
+  }
+
+  .app-content {
+    padding: 8px 8px 76px;
+  }
+
+  .app-header .container {
+    padding: 0 6px;
+  }
+
+  .brand-button {
+    font-size: 20px;
+  }
+
+  .n-card {
+    border-radius: 8px;
+  }
+
+  .n-button {
+    min-height: 36px;
+  }
+
+  .cover {
+    min-height: 260px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #101214;
+  }
+
+  .n-button--quaternary,
+  .n-button--ghost {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  .n-card {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .shop-card:hover {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+}

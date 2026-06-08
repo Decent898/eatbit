@@ -1,0 +1,18 @@
+{
+  "name": "miniprogram",
+  "version": "1.0.0",
+  "description": "吃在北理 eatbit 的原生微信小程序版本，复用 Cloudflare Pages Functions + D1 数据。",
+  "main": "app.js",
+  "scripts": {
+    "upload": "node scripts/upload-ci.cjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vant/weapp": "^1.11.7"
+  },
+  "devDependencies": {
+    "miniprogram-ci": "^2.1.31"
+  }
+}

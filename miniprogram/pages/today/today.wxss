@@ -1,0 +1,73 @@
+.padded {
+  padding: 24rpx;
+}
+
+.inline-form {
+  padding: 4rpx 24rpx 22rpx;
+  background: #ffffff;
+}
+
+.field-label {
+  margin: 20rpx 0 10rpx;
+  color: #17201c;
+  font-weight: 900;
+}
+
+.inline-form .field-label:first-child {
+  margin-top: 8rpx;
+}
+
+.compact-scroll {
+  margin-top: 18rpx;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8rpx;
+  margin-top: 18rpx;
+  padding: 8rpx;
+  border: 1rpx solid #dfe9e4;
+  border-radius: 999rpx;
+  background: #f5faf7;
+}
+
+.segmented view {
+  min-height: 62rpx;
+  border-radius: 999rpx;
+  color: #63746c;
+  text-align: center;
+  line-height: 62rpx;
+  font-weight: 800;
+}
+
+.segmented .active {
+  color: #ffffff;
+  background: #18a058;
+}
+
+.comment-area {
+  margin-top: 20rpx;
+}
+
+.form-image {
+  width: 188rpx;
+  height: 188rpx;
+  border-radius: 18rpx;
+  background: #eef2ef;
+}
+
+.image-actions {
+  margin-top: 14rpx;
+}
+
+.submit-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 24rpx 0 40rpx;
+  padding: 0 36rpx;
+}
+
+.submit-button {
+  width: 100%;
+}

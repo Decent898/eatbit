@@ -1,0 +1,42 @@
+name: Upload mini program
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Mini program version, for example 0.1.0
+        required: true
+        default: 0.1.0
+      desc:
+        description: Upload description
+        required: true
+        default: eatbit automated upload
+
+jobs:
+  upload:
+    name: Upload WeChat mini program
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: miniprogram/package-lock.json
+      - run: npm ci
+        working-directory: miniprogram
+      - name: Write private key
+        run: |
+          printf '%s' "${MP_PRIVATE_KEY}" > private.key
+          chmod 600 private.key
+        working-directory: miniprogram
+        env:
+          MP_PRIVATE_KEY: ${{ secrets.MP_PRIVATE_KEY }}
+      - name: Upload
+        run: npm run upload
+        working-directory: miniprogram
+        env:
+          MP_APPID: ${{ secrets.MP_APPID }}
+          MP_PRIVATE_KEY_PATH: private.key
+          MP_VERSION: ${{ inputs.version }}
+          MP_DESC: ${{ inputs.desc }}

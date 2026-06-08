@@ -1,0 +1,1 @@
+ALTER TABLE comments ADD COLUMN is_anonymous INTEGER NOT NULL DEFAULT 1;

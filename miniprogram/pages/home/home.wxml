@@ -1,0 +1,52 @@
+<view class="page">
+  <view class="hero">
+    <view class="hero-title">吃在北理</view>
+    <view class="hero-subtitle">按校区和区域找店面，按菜品和评价决定今天吃什么。</view>
+  </view>
+
+  <view class="van-card padded">
+    <view class="between">
+      <view>
+        <view class="title">食堂区和区域</view>
+        <view class="muted">先选校区，再点进区域看店面列表</view>
+      </view>
+      <van-button round size="small" plain type="primary" bindtap="goManage">补区域</van-button>
+    </view>
+    <scroll-view class="campus-scroll" scroll-x enable-flex show-scrollbar="{{false}}">
+      <view class="campus-row">
+        <view class="campus {{campus === '全部' ? 'active' : ''}}" data-campus="全部" bindtap="setCampus">全部</view>
+        <view class="campus {{campus === '良乡校区' ? 'active' : ''}}" data-campus="良乡校区" bindtap="setCampus">良乡</view>
+        <view class="campus {{campus === '中关村校区' ? 'active' : ''}}" data-campus="中关村校区" bindtap="setCampus">中关村</view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <van-empty wx:if="{{loading}}" description="加载中..." />
+  <van-empty wx:elif="{{visibleAreas.length === 0}}" description="还没有这个校区的区域" />
+
+  <view wx:for="{{visibleAreas}}" wx:key="id" class="van-card area-card" data-id="{{item.id}}" bindtap="goArea">
+    <van-cell title="{{item.name}}" label="{{item.description}}" is-link title-class="area-title">
+      <view slot="right-icon" class="area-right">
+        <view class="score">{{item.score}}</view>
+        <van-icon name="arrow" color="#9aa8a1" />
+      </view>
+    </van-cell>
+    <view class="area-body">
+      <view class="van-tags">
+        <van-tag type="primary" plain round>{{item.campus}}</van-tag>
+        <van-tag type="primary" plain round>{{item.kind}}</van-tag>
+      </view>
+      <view class="muted area-meta">{{item.shopCount}} 个店面</view>
+    </view>
+  </view>
+
+  <view class="van-card padded">
+    <view class="between">
+      <view>
+        <view class="title">问题反馈</view>
+        <view class="muted">发现错误、想提建议，都可以发给我们</view>
+      </view>
+      <van-button round size="small" plain type="primary" bindtap="goFeedback">反馈</van-button>
+    </view>
+  </view>
+</view>
