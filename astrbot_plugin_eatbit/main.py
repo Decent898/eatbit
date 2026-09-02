@@ -194,6 +194,18 @@ class EatBitPlugin(Star):
             provider = self.context.get_using_provider(umo=event.unified_msg_origin)
         if not provider:
             return {}
+        def relevance(entry: dict[str, Any]) -> float:
+            name = str(entry.get("name", ""))
+            return max((similarity(text, name) for text in texts), default=0.0)
+
+        active_shops = [
+            shop for shop in catalog.get("shops", []) if not shop.get("isClosed")
+        ]
+        active_items = [
+            item for item in catalog.get("items", []) if not item.get("isOffShelf")
+        ]
+        likely_shops = sorted(active_shops, key=relevance, reverse=True)[:15]
+        likely_items = sorted(active_items, key=relevance, reverse=True)[:20]
         compact_catalog = {
             "areas": [
                 {key: area.get(key) for key in ("id", "name", "campus", "kind")}
@@ -201,11 +213,11 @@ class EatBitPlugin(Star):
             ],
             "shops": [
                 {key: shop.get(key) for key in ("id", "areaId", "name")}
-                for shop in catalog.get("shops", []) if not shop.get("isClosed")
+                for shop in likely_shops
             ],
             "items": [
                 {key: item.get(key) for key in ("id", "shopId", "name", "price")}
-                for item in catalog.get("items", []) if not item.get("isOffShelf")
+                for item in likely_items
             ],
         }
         prompt = (
