@@ -3,6 +3,8 @@ dist/
 *.log
 output/
 .wrangler/
+__pycache__/
+*.py[cod]
 
 # Env and local secrets
 .env
