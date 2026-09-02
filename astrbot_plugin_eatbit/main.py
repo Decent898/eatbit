@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import re
 import time
 from dataclasses import dataclass, field
@@ -46,7 +47,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.1.0",
+    "0.2.0",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -153,12 +154,70 @@ class EatBitPlugin(Star):
 
     @staticmethod
     def _label_value(texts: list[str], labels: tuple[str, ...]) -> str:
-        pattern = rf"^(?:{'|'.join(map(re.escape, labels))})\s*[:：]\s*(.+)$"
+        all_labels = "新店|新增店铺|区域|食堂|地点|菜品|餐品|价格|评分|打分"
+        pattern = (
+            rf"(?:^|\s)(?:{'|'.join(map(re.escape, labels))})\s*[:：]\s*"
+            rf"(.+?)(?=\s+(?:{all_labels})\s*[:：]|$)"
+        )
         for text in texts:
-            match = re.match(pattern, text.strip(), re.I)
+            match = re.search(pattern, text.strip(), re.I)
             if match:
                 return match.group(1).strip()
         return ""
+
+    async def _llm_parse(
+        self,
+        event: AstrMessageEvent,
+        texts: list[str],
+        catalog: dict[str, list[dict[str, Any]]],
+    ) -> dict[str, Any]:
+        provider = self.context.get_using_provider(umo=event.unified_msg_origin)
+        if not provider:
+            return {}
+        compact_catalog = {
+            "areas": [
+                {key: area.get(key) for key in ("id", "name", "campus", "kind")}
+                for area in catalog.get("areas", [])
+            ],
+            "shops": [
+                {key: shop.get(key) for key in ("id", "areaId", "name")}
+                for shop in catalog.get("shops", []) if not shop.get("isClosed")
+            ],
+            "items": [
+                {key: item.get(key) for key in ("id", "shopId", "name", "price")}
+                for item in catalog.get("items", []) if not item.get("isOffShelf")
+            ],
+        }
+        prompt = (
+            "EatBit 目录：\n"
+            + json.dumps(compact_catalog, ensure_ascii=False, separators=(",", ":"))
+            + "\n用户依次发送的消息：\n"
+            + json.dumps(texts, ensure_ascii=False)
+            + "\n请提取最终表单。用户后发的纠正（如‘菜品是…’）优先。"
+        )
+        system_prompt = """你是校园用餐记录表单解析器。只返回一个 JSON 对象，不要 Markdown 和解释。
+字段：areaName, shopName, shopId, newShop, itemName, itemId, newItem, price, score, mealSlot, review。
+规则：
+1. area 是目录中的物理区域；shop 是具体商家、窗口或食物来源；item 是菜品。
+2. 只有目录里确实存在且语义一致时才填写对应 id，否则 id 为空，并将 newShop 或 newItem 设为 true。
+3. “新店：”是用户明确要求新建店铺；“区域：”不是店名的一部分。
+4. “菜品是…”、“餐品：…”是菜品纠正；不要把菜品误当店名。
+5. price 保留金额和单位；score 仅在用户明确给出 1-5 数字评分时填写数字，否则为 null。
+6. mealSlot 只能是早餐、午餐、晚餐、夜宵、其他；没有线索则为空。
+7. review 只保留对这顿饭有意义的描述，去掉“完成、确认、新店、区域、评分”等控制文字，但不要编造。
+8. 中关村“教工食堂”如果出现在 area 目录中，应当作为区域理解。"""
+        response = await provider.text_chat(
+            prompt=prompt,
+            contexts=[],
+            system_prompt=system_prompt,
+            temperature=0.1,
+        )
+        raw = str(response.completion_text or "").strip()
+        match = re.search(r"\{.*\}", raw, re.S)
+        if not match:
+            raise ValueError("model did not return JSON")
+        parsed = json.loads(match.group(0))
+        return parsed if isinstance(parsed, dict) else {}
 
     @staticmethod
     def _infer_area(shop_name: str, areas: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -196,6 +255,8 @@ class EatBitPlugin(Star):
             if slot in text:
                 return slot
         hour = time.localtime().tm_hour
+        if hour < 5:
+            return "夜宵"
         if hour < 10:
             return "早餐"
         if hour < 15:
@@ -204,13 +265,27 @@ class EatBitPlugin(Star):
             return "晚餐"
         return "夜宵"
 
-    async def _make_preview(self, draft: Draft) -> tuple[dict[str, Any] | None, str]:
+    async def _make_preview(
+        self, event: AstrMessageEvent, draft: Draft
+    ) -> tuple[dict[str, Any] | None, str]:
         catalog = await self._load_catalog()
         texts = [text for text in draft.texts if text]
         joined = "\n".join(texts)
+        try:
+            parsed = await self._llm_parse(event, texts, catalog)
+        except Exception as error:
+            logger.warning("EatBit model parsing failed, using rules: %s", error)
+            parsed = {}
         shops = [shop for shop in catalog.get("shops", []) if not shop.get("isClosed")]
-        explicit_new_shop = self._label_value(texts, ("新店", "新增店铺"))
-        shop, shop_score = (None, 0.0) if explicit_new_shop else self._best_match(texts, shops, 0.53)
+        explicit_new_shop = str(parsed.get("shopName") or self._label_value(texts, ("新店", "新增店铺"))).strip()
+        force_new_shop = bool(parsed.get("newShop")) or bool(self._label_value(texts, ("新店", "新增店铺")))
+        model_shop_id = str(parsed.get("shopId") or "")
+        shop = next((entry for entry in shops if str(entry.get("id")) == model_shop_id), None)
+        shop_score = 0.0
+        if not shop and not force_new_shop:
+            shop, shop_score = self._best_match(
+                [str(parsed.get("shopName") or ""), *texts], shops, 0.53
+            )
         area = None
         if not shop:
             if not explicit_new_shop:
@@ -219,7 +294,7 @@ class EatBitPlugin(Star):
                     "如果要新增，请补充“新店：店名”和“区域：东食堂”，再发送“完成”。"
                 )
             areas = list(catalog.get("areas", []))
-            area_query = self._label_value(texts, ("区域", "食堂", "地点"))
+            area_query = str(parsed.get("areaName") or self._label_value(texts, ("区域", "食堂", "地点"))).strip()
             if area_query:
                 area, _ = self._best_match([area_query], areas, 0.48)
             if not area:
@@ -231,35 +306,52 @@ class EatBitPlugin(Star):
             item for item in catalog.get("items", [])
             if str(item.get("shopId")) == str(shop.get("id")) and not item.get("isOffShelf")
         ]
-        item, _ = self._best_match(texts, items, 0.50) if items else (None, 0.0)
-        score = self._score_from_text(joined)
+        item_correction = next((
+            match.group(1).strip()
+            for text in reversed(texts)
+            if (match := re.match(r"^(?:菜品|餐品)\s*是\s*(.+)$", text.strip()))
+        ), "")
+        model_item_name = str(parsed.get("itemName") or item_correction or self._label_value(texts, ("菜品", "餐品"))).strip()
+        model_item_id = str(parsed.get("itemId") or "")
+        item = next((entry for entry in items if str(entry.get("id")) == model_item_id), None)
+        if not item and items and not bool(parsed.get("newItem")):
+            item, _ = self._best_match([model_item_name, *texts], items, 0.50)
+        new_item_name = model_item_name if not item else ""
+        parsed_score = parsed.get("score")
+        score = float(parsed_score) if isinstance(parsed_score, (int, float)) and 1 <= float(parsed_score) <= 5 else self._score_from_text(joined)
         price_match = re.search(r"(?<!\d)(\d+(?:\.\d+)?)\s*(?:r|元|块)(?!\w)", joined, re.I)
-        price = price_match.group(1) if price_match else "未识别"
+        price = str(parsed.get("price") or (price_match.group(1) if price_match else "未识别")).strip()
+        parsed_slot = str(parsed.get("mealSlot") or "")
+        meal_slot = parsed_slot if parsed_slot in {"早餐", "午餐", "晚餐", "夜宵", "其他"} else self._meal_slot(joined)
+        review = str(parsed.get("review") or joined).strip()
         preview = {
+            "parsedByModel": bool(parsed),
             "shopId": str(shop["id"]) if shop else "",
             "shopName": str(shop["name"]) if shop else explicit_new_shop,
             "isNewShop": not bool(shop),
             "areaId": str(area["id"]) if area else "",
             "areaName": str(area["name"]) if area else "",
             "itemId": str(item["id"]) if item else "",
-            "itemName": str(item["name"]) if item else "未匹配（仍可记到店铺）",
+            "itemName": str(item["name"]) if item else (new_item_name or "未填写"),
+            "isNewItem": bool(new_item_name),
             "score": score,
             "price": price,
-            "mealSlot": self._meal_slot(joined),
-            "text": joined,
+            "mealSlot": meal_slot,
+            "text": review,
             "hasImage": bool(draft.images),
         }
         draft.preview = preview
         draft.waiting_for_score = score is None
         lines = [
             "准备添加 EatBit 用餐记录：",
+            f"解析：{'DeepSeek 智能整理＋目录校验' if preview['parsedByModel'] else '规则降级解析＋目录校验'}",
             f"店铺：{'【将新建】' if preview['isNewShop'] else ''}{preview['shopName']}",
             *([f"区域：{preview['areaName']}"] if preview["isNewShop"] else []),
-            f"菜品：{preview['itemName']}",
-            f"价格：{price} 元" if price != "未识别" else "价格：未识别（会保留原文）",
+            f"菜品：{'【将新建】' if preview['isNewItem'] else ''}{preview['itemName']}",
+            f"价格：{price}" if price != "未识别" else "价格：未识别",
             f"餐次：{preview['mealSlot']}",
             f"图片：{'1 张' if preview['hasImage'] else '无'}",
-            f"内容：{joined}",
+            f"评价：{review}",
         ]
         if score is None:
             lines.append("还差数字评分，请回复“评分5”（支持 1～5 分）。")
@@ -309,6 +401,10 @@ class EatBitPlugin(Star):
                     "areaId": preview["areaId"],
                 } if preview["isNewShop"] else None),
                 "itemId": preview["itemId"] or None,
+                "newItem": ({
+                    "name": preview["itemName"],
+                    "price": preview["price"] if preview["price"] != "未识别" else "",
+                } if preview["isNewItem"] else None),
                 "score": preview["score"],
                 "text": preview["text"],
                 "image": image,
@@ -317,11 +413,12 @@ class EatBitPlugin(Star):
             },
         )
         if status in (200, 201):
-            if data.get("createdShop"):
+            if data.get("createdShop") or data.get("createdItem"):
                 self.catalog = None
             suffix = "（已自动去重）" if data.get("duplicate") else ""
             created = "，并已新增店铺" if data.get("createdShop") else ""
-            return True, f"已添加到 EatBit：{preview['shopName']} · {preview['mealSlot']}{created} {suffix}".strip()
+            created_item = "、菜品" if data.get("createdShop") and data.get("createdItem") else ("，并已新增菜品" if data.get("createdItem") else "")
+            return True, f"已添加到 EatBit：{preview['shopName']} · {preview['mealSlot']}{created}{created_item} {suffix}".strip()
         if data.get("error") == "qq_not_bound":
             return False, "这个 QQ 还没有登录 EatBit，请先 @机器人 发送“登录”。"
         logger.error("EatBit meal record failed: %s %s", status, data.get("error"))
@@ -394,7 +491,7 @@ class EatBitPlugin(Star):
             should_preview = True
         if should_preview:
             try:
-                _, reply = await self._make_preview(draft)
+                _, reply = await self._make_preview(event, draft)
             except Exception as error:
                 logger.exception("EatBit preview failed: %s", error)
                 reply = "读取 EatBit 店铺目录失败，草稿已保留，请稍后再发送“完成”。"

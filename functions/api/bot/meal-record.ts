@@ -9,6 +9,10 @@ interface MealRecordBody {
     areaId?: string
   }
   itemId?: string
+  newItem?: {
+    name?: string
+    price?: string
+  }
   score?: number
   text?: string
   image?: string
@@ -35,6 +39,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const newShopName = String(body.newShop?.name ?? '').trim()
   const newShopAreaId = String(body.newShop?.areaId ?? '').trim()
+  const newItemName = String(body.newItem?.name ?? '').trim()
+  const newItemPrice = String(body.newItem?.price ?? '').trim().slice(0, 30)
   if (!/^\d{5,20}$/.test(qqId) || !messageId || (!shopId && !newShopName)) {
     return json({ error: 'qqId, messageId and shopId or newShop are required' }, { status: 400 })
   }
@@ -54,14 +60,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!identity) return json({ error: 'qq_not_bound' }, { status: 403 })
 
   const duplicate = await env.DB.prepare(
-    `SELECT id, shop_id AS shopId
+    `SELECT id, shop_id AS shopId, item_id AS itemId
      FROM comments WHERE source = 'qq' AND source_message_id = ?`
-  ).bind(messageId).first<{ id: number; shopId: string }>()
+  ).bind(messageId).first<{ id: number; shopId: string; itemId: string | null }>()
   if (duplicate) {
-    return json({ id: duplicate.id, shopId: duplicate.shopId, duplicate: true })
+    return json({
+      id: duplicate.id,
+      shopId: duplicate.shopId,
+      itemId: duplicate.itemId,
+      createdShop: false,
+      createdItem: false,
+      duplicate: true
+    })
   }
 
   let createdShop = false
+  let createdItem = false
   if (!shopId) {
     if (!newShopAreaId || newShopName.length > 40) {
       return json({ error: 'new shop requires areaId and a 1-40 character name' }, { status: 400 })
@@ -101,6 +115,26 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
        WHERE id = ? AND shop_id = ? AND COALESCE(is_off_shelf, 0) = 0`
     ).bind(itemId, shopId).first<{ id: string }>()
     if (!item) return json({ error: 'item not found or off shelf' }, { status: 404 })
+  } else if (newItemName) {
+    if (newItemName.length > 40) {
+      return json({ error: 'new item name must be 1-40 characters' }, { status: 400 })
+    }
+    const sameItem = await env.DB.prepare(
+      `SELECT id FROM items
+       WHERE shop_id = ? AND trim(name) = trim(?) AND COALESCE(is_off_shelf, 0) = 0
+       ORDER BY created_at ASC LIMIT 1`
+    ).bind(shopId, newItemName).first<{ id: string }>()
+    if (sameItem) {
+      itemId = sameItem.id
+    } else {
+      itemId = makeId(newItemName)
+      await env.DB.prepare(
+        `INSERT INTO items
+         (id, shop_id, name, price, heat, description, creator_user_id)
+         VALUES (?, ?, ?, ?, 0, '', ?)`
+      ).bind(itemId, shopId, newItemName, newItemPrice, identity.id).run()
+      createdItem = true
+    }
   }
 
   try {
@@ -125,6 +159,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       id: result.meta.last_row_id,
       shopId,
       createdShop,
+      itemId,
+      createdItem,
       duplicate: false
     }, { status: 201 })
   } catch (error) {
