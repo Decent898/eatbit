@@ -553,7 +553,11 @@ class EatBitPlugin(Star):
             return
 
         draft = self.drafts.get(key)
-        starts_record = mentioned and (bool(images) or any(word in text for word in ("记录", "记一顿", "吃了")))
+        record_command = re.match(
+            r"^(?:记录吃饭|开始记录|记一顿|记录)(?=$|[\s：:，,])",
+            text,
+        )
+        starts_record = mentioned and bool(record_command)
         if not draft and starts_record:
             now = time.time()
             draft = Draft(
@@ -562,7 +566,7 @@ class EatBitPlugin(Star):
                 first_message_id=str(event.message_obj.message_id),
             )
             self.drafts[key] = draft
-            clean = re.sub(r"(?:记录吃饭|记录|记一顿)", "", text).strip()
+            clean = text[record_command.end():].lstrip(" \t：:，,")
             if clean:
                 draft.texts.append(clean)
             draft.images.extend(images[:1])
