@@ -48,7 +48,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.4.0",
+    "0.5.0",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -61,6 +61,8 @@ class EatBitPlugin(Star):
         self.draft_timeout = max(60, int(config.get("draft_timeout_seconds", 180)))
         self.parser_provider_id = str(config.get("parser_provider_id", "eatbit_parser")).strip()
         self.parser_timeout = max(3, min(30, int(config.get("parser_timeout_seconds", 12))))
+        self.vision_provider_id = str(config.get("vision_provider_id", "vision")).strip()
+        self.vision_timeout = max(5, min(60, int(config.get("vision_timeout_seconds", 20))))
         self.drafts: dict[tuple[str, str], Draft] = {}
         self.catalog: dict[str, list[dict[str, Any]]] | None = None
         self.catalog_loaded_at = 0.0
@@ -133,6 +135,67 @@ class EatBitPlugin(Star):
         except Exception as error:
             logger.warning("EatBit private login message failed: %s", error)
             return False, "私聊发送失败。请先加机器人好友，再私聊发送“登录”。"
+
+    async def _describe_images(
+        self, event: AstrMessageEvent, images: list[Image], prompt: str
+    ) -> str:
+        provider = self.context.get_provider_by_id(self.vision_provider_id)
+        if not provider:
+            return "识图模型尚未就绪，请稍后再试。"
+        try:
+            provider_config = provider.provider_config
+            api_base = str(provider_config.get("api_base", ""))
+            if "/ai/v1" not in api_base:
+                raise ValueError("vision provider is not a Workers AI provider")
+            keys = provider.get_keys()
+            api_key = str(keys[0] if isinstance(keys, list) else keys)
+            model = str(provider_config.get("model_config", {}).get("model", ""))
+            image_data = await self._compressed_data_url(images[0])
+            payload = {
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是群聊中的视觉助手。请准确识别图片，用简洁自然的中文回答；"
+                            "看不清或无法确定的内容要明确说明，不要编造。"
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt or "请描述图片内容，并回答图片相关问题。",
+                    },
+                ],
+                "image": image_data,
+                "temperature": 0.2,
+                "max_tokens": 500,
+            }
+            timeout = aiohttp.ClientTimeout(total=self.vision_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    api_base.split("/ai/v1", 1)[0] + "/ai/run/" + model,
+                    headers={
+                        "authorization": f"Bearer {api_key}",
+                        "content-type": "application/json",
+                    },
+                    json=payload,
+                ) as response:
+                    body = await response.json()
+                    if response.status != 200 or not body.get("success"):
+                        raise RuntimeError(
+                            f"Workers AI returned HTTP {response.status}"
+                        )
+            answer = str(body.get("result", {}).get("response") or "").strip()
+        except (asyncio.TimeoutError, aiohttp.ServerTimeoutError):
+            logger.warning(
+                "Vision model timed out after %ss (provider=%s)",
+                self.vision_timeout,
+                self.vision_provider_id,
+            )
+            return "这次识图超时了，请稍后重试。"
+        except Exception as error:
+            logger.warning("Vision model request failed: %s", error)
+            return "图片识别失败，请稍后重试。"
+        return answer or "没有从图片中识别出可靠内容。"
 
     @staticmethod
     def _contains_bot_at(event: AstrMessageEvent) -> bool:
@@ -557,6 +620,12 @@ class EatBitPlugin(Star):
             r"^(?:记录吃饭|开始记录|记一顿|记录)(?=$|[\s：:，,])",
             text,
         )
+        if mentioned and images and not draft and not record_command:
+            event.stop_event()
+            reply = await self._describe_images(event, images, text)
+            yield self._reply(event, reply)
+            return
+
         starts_record = mentioned and bool(record_command)
         if not draft and starts_record:
             now = time.time()

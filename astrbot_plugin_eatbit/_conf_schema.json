@@ -29,5 +29,15 @@
     "description": "表单 AI 解析硬超时（秒），超时后立即降级，不再卡住群聊",
     "type": "int",
     "default": 12
+  },
+  "vision_provider_id": {
+    "description": "普通群聊图片识别使用的 AstrBot 模型提供商 ID",
+    "type": "string",
+    "default": "vision"
+  },
+  "vision_timeout_seconds": {
+    "description": "普通图片识别硬超时（秒）",
+    "type": "int",
+    "default": 20
   }
 }
