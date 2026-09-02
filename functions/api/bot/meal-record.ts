@@ -1,9 +1,13 @@
-import { type Env, json, requireBot } from '../_utils'
+import { type Env, json, makeId, requireBot } from '../_utils'
 
 interface MealRecordBody {
   qqId?: string
   messageId?: string
   shopId?: string
+  newShop?: {
+    name?: string
+    areaId?: string
+  }
   itemId?: string
   score?: number
   text?: string
@@ -22,15 +26,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = await request.json<MealRecordBody>()
   const qqId = String(body.qqId ?? '').trim()
   const messageId = String(body.messageId ?? '').trim()
-  const shopId = String(body.shopId ?? '').trim()
-  const itemId = String(body.itemId ?? '').trim() || null
+  let shopId = String(body.shopId ?? '').trim()
+  let itemId = String(body.itemId ?? '').trim() || null
   const text = String(body.text ?? '').trim()
   const image = String(body.image ?? '')
   const score = Number(body.score)
   const mealSlot = mealSlots.has(String(body.mealSlot)) ? String(body.mealSlot) : '其他'
 
-  if (!/^\d{5,20}$/.test(qqId) || !messageId || !shopId) {
-    return json({ error: 'qqId, messageId and shopId are required' }, { status: 400 })
+  const newShopName = String(body.newShop?.name ?? '').trim()
+  const newShopAreaId = String(body.newShop?.areaId ?? '').trim()
+  if (!/^\d{5,20}$/.test(qqId) || !messageId || (!shopId && !newShopName)) {
+    return json({ error: 'qqId, messageId and shopId or newShop are required' }, { status: 400 })
   }
   if (!text || !Number.isFinite(score) || score < 1 || score > 5) {
     return json({ error: 'text and score (1-5) are required' }, { status: 400 })
@@ -46,6 +52,43 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
      WHERE qq_identities.platform = 'onebot11' AND qq_identities.external_user_id = ?`
   ).bind(qqId).first<{ id: number; email: string }>()
   if (!identity) return json({ error: 'qq_not_bound' }, { status: 403 })
+
+  const duplicate = await env.DB.prepare(
+    `SELECT id, shop_id AS shopId
+     FROM comments WHERE source = 'qq' AND source_message_id = ?`
+  ).bind(messageId).first<{ id: number; shopId: string }>()
+  if (duplicate) {
+    return json({ id: duplicate.id, shopId: duplicate.shopId, duplicate: true })
+  }
+
+  let createdShop = false
+  if (!shopId) {
+    if (!newShopAreaId || newShopName.length > 40) {
+      return json({ error: 'new shop requires areaId and a 1-40 character name' }, { status: 400 })
+    }
+    const area = await env.DB.prepare('SELECT id FROM areas WHERE id = ?')
+      .bind(newShopAreaId).first<{ id: string }>()
+    if (!area) return json({ error: 'area not found' }, { status: 404 })
+
+    const sameName = await env.DB.prepare(
+      `SELECT id FROM shops
+       WHERE area_id = ? AND trim(name) = trim(?) AND COALESCE(is_closed, 0) = 0
+       ORDER BY created_at ASC LIMIT 1`
+    ).bind(newShopAreaId, newShopName).first<{ id: string }>()
+    if (sameName) {
+      shopId = sameName.id
+    } else {
+      shopId = makeId(newShopName)
+      await env.DB.prepare(
+        `INSERT INTO shops
+         (id, area_id, name, creator, description, tags, image, creator_user_id)
+         VALUES (?, ?, ?, ?, '', '[]', '', ?)`
+      ).bind(shopId, newShopAreaId, newShopName, identity.email, identity.id).run()
+      createdShop = true
+    }
+    // A new shop cannot contain a pre-existing item id.
+    itemId = null
+  }
 
   const shop = await env.DB.prepare(
     'SELECT id FROM shops WHERE id = ? AND COALESCE(is_closed, 0) = 0'
@@ -78,7 +121,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       mealSlot,
       messageId
     ).run()
-    return json({ id: result.meta.last_row_id, duplicate: false }, { status: 201 })
+    return json({
+      id: result.meta.last_row_id,
+      shopId,
+      createdShop,
+      duplicate: false
+    }, { status: 201 })
   } catch (error) {
     const existing = await env.DB.prepare(
       `SELECT id FROM comments WHERE source = 'qq' AND source_message_id = ?`

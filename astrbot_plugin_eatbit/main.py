@@ -152,6 +152,31 @@ class EatBitPlugin(Star):
         return (best, best_score) if best_score >= minimum else (None, best_score)
 
     @staticmethod
+    def _label_value(texts: list[str], labels: tuple[str, ...]) -> str:
+        pattern = rf"^(?:{'|'.join(map(re.escape, labels))})\s*[:：]\s*(.+)$"
+        for text in texts:
+            match = re.match(pattern, text.strip(), re.I)
+            if match:
+                return match.group(1).strip()
+        return ""
+
+    @staticmethod
+    def _infer_area(shop_name: str, areas: list[dict[str, Any]]) -> dict[str, Any] | None:
+        prefix_map = (
+            (("东一", "东二", "东三", "东食堂"), "east-canteen"),
+            (("北一", "北二", "北三", "北食堂"), "north-canteen"),
+            (("南食堂", "南一", "南二"), "south-canteen"),
+            (("清真",), "halal-canteen"),
+            (("学服内",), "xuefu-inside"),
+            (("学服外",), "xuefu-outside"),
+            (("甘棠",), "gantang-7d"),
+        )
+        for prefixes, area_id in prefix_map:
+            if any(prefix in shop_name for prefix in prefixes):
+                return next((area for area in areas if str(area.get("id")) == area_id), None)
+        return None
+
+    @staticmethod
     def _score_from_text(text: str) -> float | None:
         patterns = (
             r"(?:评分|打分|星级|评级)\s*[:：]?\s*([1-5](?:\.\d)?)\s*(?:分|星)?",
@@ -184,22 +209,38 @@ class EatBitPlugin(Star):
         texts = [text for text in draft.texts if text]
         joined = "\n".join(texts)
         shops = [shop for shop in catalog.get("shops", []) if not shop.get("isClosed")]
-        shop, shop_score = self._best_match(texts, shops, 0.53)
+        explicit_new_shop = self._label_value(texts, ("新店", "新增店铺"))
+        shop, shop_score = (None, 0.0) if explicit_new_shop else self._best_match(texts, shops, 0.53)
+        area = None
         if not shop:
-            return None, f"没有可靠匹配到店铺（最高相似度 {shop_score:.0%}），请补充完整店名后再发送“完成”。"
+            if not explicit_new_shop:
+                return None, (
+                    f"没有可靠匹配到现有店铺（最高相似度 {shop_score:.0%}）。"
+                    "如果要新增，请补充“新店：店名”和“区域：东食堂”，再发送“完成”。"
+                )
+            areas = list(catalog.get("areas", []))
+            area_query = self._label_value(texts, ("区域", "食堂", "地点"))
+            if area_query:
+                area, _ = self._best_match([area_query], areas, 0.48)
+            if not area:
+                area = self._infer_area(explicit_new_shop, areas)
+            if not area:
+                return None, "新店名已收到，但无法判断所属区域。请补充例如“区域：东食堂”，再发送“完成”。"
 
-        items = [
-            item
-            for item in catalog.get("items", [])
+        items = [] if not shop else [
+            item for item in catalog.get("items", [])
             if str(item.get("shopId")) == str(shop.get("id")) and not item.get("isOffShelf")
         ]
-        item, _ = self._best_match(texts, items, 0.50)
+        item, _ = self._best_match(texts, items, 0.50) if items else (None, 0.0)
         score = self._score_from_text(joined)
         price_match = re.search(r"(?<!\d)(\d+(?:\.\d+)?)\s*(?:r|元|块)(?!\w)", joined, re.I)
         price = price_match.group(1) if price_match else "未识别"
         preview = {
-            "shopId": str(shop["id"]),
-            "shopName": str(shop["name"]),
+            "shopId": str(shop["id"]) if shop else "",
+            "shopName": str(shop["name"]) if shop else explicit_new_shop,
+            "isNewShop": not bool(shop),
+            "areaId": str(area["id"]) if area else "",
+            "areaName": str(area["name"]) if area else "",
             "itemId": str(item["id"]) if item else "",
             "itemName": str(item["name"]) if item else "未匹配（仍可记到店铺）",
             "score": score,
@@ -212,7 +253,8 @@ class EatBitPlugin(Star):
         draft.waiting_for_score = score is None
         lines = [
             "准备添加 EatBit 用餐记录：",
-            f"店铺：{preview['shopName']}",
+            f"店铺：{'【将新建】' if preview['isNewShop'] else ''}{preview['shopName']}",
+            *([f"区域：{preview['areaName']}"] if preview["isNewShop"] else []),
             f"菜品：{preview['itemName']}",
             f"价格：{price} 元" if price != "未识别" else "价格：未识别（会保留原文）",
             f"餐次：{preview['mealSlot']}",
@@ -262,6 +304,10 @@ class EatBitPlugin(Star):
                     f"{draft.first_message_id}:{int(draft.created_at)}"
                 ),
                 "shopId": preview["shopId"],
+                "newShop": ({
+                    "name": preview["shopName"],
+                    "areaId": preview["areaId"],
+                } if preview["isNewShop"] else None),
                 "itemId": preview["itemId"] or None,
                 "score": preview["score"],
                 "text": preview["text"],
@@ -271,8 +317,11 @@ class EatBitPlugin(Star):
             },
         )
         if status in (200, 201):
+            if data.get("createdShop"):
+                self.catalog = None
             suffix = "（已自动去重）" if data.get("duplicate") else ""
-            return True, f"已添加到 EatBit：{preview['shopName']} · {preview['mealSlot']} {suffix}".strip()
+            created = "，并已新增店铺" if data.get("createdShop") else ""
+            return True, f"已添加到 EatBit：{preview['shopName']} · {preview['mealSlot']}{created} {suffix}".strip()
         if data.get("error") == "qq_not_bound":
             return False, "这个 QQ 还没有登录 EatBit，请先 @机器人 发送“登录”。"
         logger.error("EatBit meal record failed: %s %s", status, data.get("error"))
