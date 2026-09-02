@@ -364,8 +364,23 @@ class EatBitPlugin(Star):
         except Exception as error:
             logger.warning("EatBit model parsing failed, using rules: %s", error)
             parsed = {}
-        shops = [shop for shop in catalog.get("shops", []) if not shop.get("isClosed")]
         areas = list(catalog.get("areas", []))
+        parsed_shop_name = str(parsed.get("shopName") or "").strip()
+        mistaken_area = next(
+            (
+                entry
+                for entry in areas
+                if normalize(str(entry.get("name", ""))) == normalize(parsed_shop_name)
+            ),
+            None,
+        )
+        if mistaken_area:
+            parsed["areaName"] = str(mistaken_area.get("name", ""))
+            parsed["shopName"] = ""
+            parsed["shopId"] = ""
+            parsed["newShop"] = False
+
+        shops = [shop for shop in catalog.get("shops", []) if not shop.get("isClosed")]
         labelled_new_shop = self._label_value(texts, ("新店", "新增店铺"))
         proposed_shop_name = str(parsed.get("shopName") or labelled_new_shop).strip()
         force_new_shop = bool(parsed.get("newShop")) or bool(labelled_new_shop)
