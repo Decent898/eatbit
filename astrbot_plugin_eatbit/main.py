@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import io
 import json
 import re
@@ -47,7 +48,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.3.0",
+    "0.4.0",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -58,6 +59,8 @@ class EatBitPlugin(Star):
         groups = str(config.get("allowed_group_ids", ""))
         self.allowed_groups = {item.strip() for item in groups.split(",") if item.strip()}
         self.draft_timeout = max(60, int(config.get("draft_timeout_seconds", 180)))
+        self.parser_provider_id = str(config.get("parser_provider_id", "eatbit_parser")).strip()
+        self.parser_timeout = max(3, min(30, int(config.get("parser_timeout_seconds", 12))))
         self.drafts: dict[tuple[str, str], Draft] = {}
         self.catalog: dict[str, list[dict[str, Any]]] | None = None
         self.catalog_loaded_at = 0.0
@@ -182,7 +185,13 @@ class EatBitPlugin(Star):
         texts: list[str],
         catalog: dict[str, list[dict[str, Any]]],
     ) -> dict[str, Any]:
-        provider = self.context.get_using_provider(umo=event.unified_msg_origin)
+        provider = (
+            self.context.get_provider_by_id(self.parser_provider_id)
+            if self.parser_provider_id
+            else None
+        )
+        if not provider:
+            provider = self.context.get_using_provider(umo=event.unified_msg_origin)
         if not provider:
             return {}
         compact_catalog = {
@@ -217,11 +226,15 @@ class EatBitPlugin(Star):
 6. mealSlot 只能是早餐、午餐、晚餐、夜宵、其他；没有线索则为空。
 7. review 只保留对这顿饭有意义的描述，去掉“完成、确认、新店、区域、评分”等控制文字，但不要编造。
 8. 中关村“教工食堂”如果出现在 area 目录中，应当作为区域理解。"""
-        response = await provider.text_chat(
-            prompt=prompt,
-            contexts=[],
-            system_prompt=system_prompt,
-            temperature=0.1,
+        response = await asyncio.wait_for(
+            provider.text_chat(
+                prompt=prompt,
+                contexts=[],
+                system_prompt=system_prompt,
+                temperature=0.1,
+                max_tokens=700,
+            ),
+            timeout=self.parser_timeout,
         )
         raw = str(response.completion_text or "").strip()
         match = re.search(r"\{.*\}", raw, re.S)
@@ -276,6 +289,51 @@ class EatBitPlugin(Star):
             return "晚餐"
         return "夜宵"
 
+    @staticmethod
+    def _rule_item_name(texts: list[str], area_name: str) -> str:
+        """Best-effort fallback used only when the dedicated parser is unavailable."""
+        for text in texts:
+            match = re.search(
+                r"([\u4e00-\u9fffA-Za-z][\u4e00-\u9fffA-Za-z0-9]{0,15})"
+                r"\s*\d+(?:\.\d+)?\s*(?:r|元|块)",
+                text,
+                re.I,
+            )
+            if not match:
+                continue
+            name = match.group(1)
+            if area_name:
+                name = name.replace(area_name, "")
+            name = re.sub(r"^(?:中关村)?(?:一|二|三|四|五|六|七|八|九|十|\d+)楼", "", name)
+            name = re.sub(r"^(?:吃了|点了|买了|来份|来一份)", "", name)
+            if name:
+                return name
+        return ""
+
+    @staticmethod
+    def _render_preview(preview: dict[str, Any]) -> str:
+        shop_label = preview["shopName"] or "待确认"
+        item_label = preview["itemName"] or "未填写"
+        lines = [
+            "AI 已整理这顿饭：",
+            f"店铺：{'【将新建】' if preview['isNewShop'] else ''}{shop_label}",
+            f"区域：{preview['areaName'] or '待确认'}",
+            f"菜品：{'【将新建】' if preview['isNewItem'] else ''}{item_label}",
+            f"价格：{preview['price']}",
+            f"餐次：{preview['mealSlot']}",
+            f"图片：{'1 张' if preview['hasImage'] else '无'}",
+            f"评价：{preview['text'] or '未填写'}",
+            f"评分：{preview['score']:g}/5" if preview["score"] is not None else "评分：待补充",
+        ]
+        if preview["blockingIssues"]:
+            lines.append("还需要你补充或确认：" + "；".join(preview["blockingIssues"]))
+            lines.append("直接用一句话告诉我即可，例如：“店铺叫自选菜，评分4”。")
+        else:
+            if preview["issues"]:
+                lines.append("请顺便核对：" + "；".join(preview["issues"]))
+            lines.append("回复“确认”提交；要修改也直接用人话说。")
+        return "\n".join(lines)
+
     async def _make_preview(
         self, event: AstrMessageEvent, draft: Draft
     ) -> tuple[dict[str, Any] | None, str]:
@@ -284,34 +342,41 @@ class EatBitPlugin(Star):
         joined = "\n".join(texts)
         try:
             parsed = await self._llm_parse(event, texts, catalog)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "EatBit parser timed out after %ss (provider=%s), using rules",
+                self.parser_timeout,
+                self.parser_provider_id,
+            )
+            parsed = {}
         except Exception as error:
             logger.warning("EatBit model parsing failed, using rules: %s", error)
             parsed = {}
         shops = [shop for shop in catalog.get("shops", []) if not shop.get("isClosed")]
-        explicit_new_shop = str(parsed.get("shopName") or self._label_value(texts, ("新店", "新增店铺"))).strip()
-        force_new_shop = bool(parsed.get("newShop")) or bool(self._label_value(texts, ("新店", "新增店铺")))
+        areas = list(catalog.get("areas", []))
+        labelled_new_shop = self._label_value(texts, ("新店", "新增店铺"))
+        proposed_shop_name = str(parsed.get("shopName") or labelled_new_shop).strip()
+        force_new_shop = bool(parsed.get("newShop")) or bool(labelled_new_shop)
         model_shop_id = str(parsed.get("shopId") or "")
         shop = next((entry for entry in shops if str(entry.get("id")) == model_shop_id), None)
-        shop_score = 0.0
         if not shop and not force_new_shop:
-            shop, shop_score = self._best_match(
+            shop, _ = self._best_match(
                 [str(parsed.get("shopName") or ""), *texts], shops, 0.53
             )
         area = None
         if not shop:
-            if not explicit_new_shop:
-                return None, (
-                    f"没有可靠匹配到现有店铺（最高相似度 {shop_score:.0%}）。"
-                    "如果要新增，请补充“新店：店名”和“区域：东食堂”，再发送“完成”。"
-                )
-            areas = list(catalog.get("areas", []))
             area_query = str(parsed.get("areaName") or self._label_value(texts, ("区域", "食堂", "地点"))).strip()
             if area_query:
                 area, _ = self._best_match([area_query], areas, 0.48)
             if not area:
-                area = self._infer_area(explicit_new_shop, areas)
-            if not area:
-                return None, "新店名已收到，但无法判断所属区域。请补充例如“区域：东食堂”，再发送“完成”。"
+                area, _ = self._best_match(texts, areas, 0.48)
+            if not area and proposed_shop_name:
+                area = self._infer_area(proposed_shop_name, areas)
+        elif shop:
+            area = next(
+                (entry for entry in areas if str(entry.get("id")) == str(shop.get("areaId"))),
+                None,
+            )
 
         items = [] if not shop else [
             item for item in catalog.get("items", [])
@@ -323,6 +388,8 @@ class EatBitPlugin(Star):
             if (match := re.match(r"^(?:菜品|餐品)\s*是\s*(.+)$", text.strip()))
         ), "")
         model_item_name = str(parsed.get("itemName") or item_correction or self._label_value(texts, ("菜品", "餐品"))).strip()
+        if not model_item_name and not parsed:
+            model_item_name = self._rule_item_name(texts, str(area.get("name", "")) if area else "")
         model_item_id = str(parsed.get("itemId") or "")
         item = next((entry for entry in items if str(entry.get("id")) == model_item_id), None)
         if not item and items and not bool(parsed.get("newItem")):
@@ -336,19 +403,26 @@ class EatBitPlugin(Star):
         meal_slot = parsed_slot if parsed_slot in {"早餐", "午餐", "晚餐", "夜宵", "其他"} else self._meal_slot(joined)
         review = str(parsed.get("review") or joined).strip()
         issues = [str(issue).strip() for issue in parsed.get("issues", []) if str(issue).strip()] if isinstance(parsed.get("issues"), list) else []
+        blocking_issues = []
+        if not shop and not proposed_shop_name:
+            blocking_issues.append("店铺或窗口名不确定")
+        if not shop and proposed_shop_name and not area:
+            blocking_issues.append("新店所属区域不确定")
         if not new_item_name and not item:
-            issues.append("没有识别到菜品，可以用人话回复“菜品改成……”")
+            issues.append("菜品没有识别到")
         if price == "未识别":
-            issues.append("没有识别到价格；不影响提交，也可以补充价格")
+            issues.append("价格没有识别到（不影响提交）")
+        if score is None:
+            blocking_issues.append("缺少 1～5 分评分")
         preview = {
             "parsedByModel": bool(parsed),
             "shopId": str(shop["id"]) if shop else "",
-            "shopName": str(shop["name"]) if shop else explicit_new_shop,
-            "isNewShop": not bool(shop),
+            "shopName": str(shop["name"]) if shop else proposed_shop_name,
+            "isNewShop": not bool(shop) and bool(proposed_shop_name),
             "areaId": str(area["id"]) if area else "",
             "areaName": str(area["name"]) if area else "",
             "itemId": str(item["id"]) if item else "",
-            "itemName": str(item["name"]) if item else (new_item_name or "未填写"),
+            "itemName": str(item["name"]) if item else new_item_name,
             "isNewItem": bool(new_item_name),
             "score": score,
             "price": price,
@@ -356,27 +430,11 @@ class EatBitPlugin(Star):
             "text": review,
             "hasImage": bool(draft.images),
             "issues": list(dict.fromkeys(issues)),
+            "blockingIssues": list(dict.fromkeys(blocking_issues)),
         }
         draft.preview = preview
         draft.waiting_for_score = score is None
-        lines = [
-            "准备添加 EatBit 用餐记录：",
-            f"解析：{'DeepSeek 智能整理＋目录校验' if preview['parsedByModel'] else '规则降级解析＋目录校验'}",
-            f"店铺：{'【将新建】' if preview['isNewShop'] else ''}{preview['shopName']}",
-            *([f"区域：{preview['areaName']}"] if preview["isNewShop"] else []),
-            f"菜品：{'【将新建】' if preview['isNewItem'] else ''}{preview['itemName']}",
-            f"价格：{price}" if price != "未识别" else "价格：未识别",
-            f"餐次：{preview['mealSlot']}",
-            f"图片：{'1 张' if preview['hasImage'] else '无'}",
-            f"评价：{review}",
-        ]
-        if preview["issues"]:
-            lines.append("AI 建议补充或核对：" + "；".join(preview["issues"]))
-        if score is None:
-            lines.append("还差数字评分，请回复“评分5”（支持 1～5 分）。")
-        else:
-            lines.extend((f"评分：{score:g}/5", "回复“确认”写入，或回复“取消”。"))
-        return preview, "\n".join(lines)
+        return preview, self._render_preview(preview)
 
     @staticmethod
     async def _compressed_data_url(image: Image) -> str:
@@ -494,7 +552,7 @@ class EatBitPlugin(Star):
             yield self._reply(event, "已取消这条 EatBit 记录。")
             return
 
-        if text == "确认" and draft.preview and not draft.waiting_for_score:
+        if text == "确认" and draft.preview and not draft.preview.get("blockingIssues"):
             try:
                 ok, reply = await self._submit(event, draft)
             except Exception as error:
@@ -503,6 +561,14 @@ class EatBitPlugin(Star):
             if ok:
                 self.drafts.pop(key, None)
             yield self._reply(event, reply)
+            return
+
+        if text == "确认" and draft.preview:
+            yield self._reply(
+                event,
+                "还不能提交：" + "；".join(draft.preview.get("blockingIssues", []))
+                + "。直接用一句话补充或修改即可。",
+            )
             return
 
         completion = re.match(r"^(?:完成|发完了|提交)(?:\s*[:：,，;；]?\s*(.*))?$", text)

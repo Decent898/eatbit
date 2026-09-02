@@ -19,5 +19,15 @@
     "description": "连续消息草稿超时时间（秒）",
     "type": "int",
     "default": 180
+  },
+  "parser_provider_id": {
+    "description": "专门用于整理记餐表单的 AstrBot 模型提供商 ID",
+    "type": "string",
+    "default": "eatbit_parser"
+  },
+  "parser_timeout_seconds": {
+    "description": "表单 AI 解析硬超时（秒），超时后立即降级，不再卡住群聊",
+    "type": "int",
+    "default": 12
   }
 }
