@@ -48,7 +48,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.0",
+    "0.5.1",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -66,6 +66,61 @@ class EatBitPlugin(Star):
         self.drafts: dict[tuple[str, str], Draft] = {}
         self.catalog: dict[str, list[dict[str, Any]]] | None = None
         self.catalog_loaded_at = 0.0
+
+    @staticmethod
+    def _qwen_compatible_messages(messages: list[Any]) -> list[dict[str, Any]]:
+        compatible: list[dict[str, Any]] = []
+        for original in messages:
+            if not isinstance(original, dict) or not original.get("role"):
+                continue
+            message = dict(original)
+            content = message.get("content", "")
+            if isinstance(content, list):
+                text_parts: list[str] = []
+                image_count = 0
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        if part.get("text"):
+                            text_parts.append(str(part["text"]))
+                    elif isinstance(part, dict) and part.get("type") == "image_url":
+                        image_count += 1
+                    elif isinstance(part, str):
+                        text_parts.append(part)
+                if image_count:
+                    text_parts.append(f"[图片 {image_count} 张，已由视觉模型处理]")
+                content = "\n".join(text_parts)
+            elif content is None:
+                content = ""
+            elif not isinstance(content, str):
+                content = json.dumps(content, ensure_ascii=False)
+            message["content"] = content
+            compatible.append(message)
+        return compatible
+
+    def _ensure_qwen_provider_compatibility(self, provider: Any) -> None:
+        if getattr(provider, "_eatbit_qwen_compat", False):
+            return
+        original_prepare = provider._prepare_chat_payload
+
+        async def compatible_prepare(*args: Any, **kwargs: Any):
+            payload, context_query = await original_prepare(*args, **kwargs)
+            messages = self._qwen_compatible_messages(payload.get("messages", []))
+            payload["messages"] = messages
+            return payload, messages
+
+        provider._prepare_chat_payload = compatible_prepare
+        provider._eatbit_qwen_compat = True
+
+    @filter.on_llm_request()
+    async def normalize_qwen_requests(self, event: AstrMessageEvent, request: Any) -> None:
+        provider = self.context.get_using_provider(umo=event.unified_msg_origin)
+        if not provider:
+            return
+        model = str(provider.get_model() or "")
+        if model != "@cf/qwen/qwen3-30b-a3b-fp8":
+            return
+        request.contexts = self._qwen_compatible_messages(request.contexts or [])
+        self._ensure_qwen_provider_compatibility(provider)
 
     def _authorized_group(self, group_id: str) -> bool:
         return not self.allowed_groups or group_id in self.allowed_groups
