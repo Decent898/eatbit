@@ -47,7 +47,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.2.0",
+    "0.3.0",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -98,24 +98,35 @@ class EatBitPlugin(Star):
                 self.catalog_loaded_at = time.time()
                 return self.catalog
 
-    async def _send_private_login(self, event: AstrMessageEvent) -> tuple[bool, str]:
+    async def _send_private_login(
+        self, event: AstrMessageEvent, binding: bool = False
+    ) -> tuple[bool, str]:
         if not self.bot_token:
             return False, "机器人尚未配置 EatBit 密钥，请联系管理员。"
         status, data = await self._post(
             "/api/bot/login-ticket",
             {"qqId": event.get_sender_id(), "nickname": event.get_sender_name()},
         )
-        if status != 200 or not data.get("url"):
+        target_url = data.get("bindUrl") if binding else data.get("url")
+        if status != 200 or not target_url:
             logger.error("EatBit login ticket failed: %s %s", status, data.get("error"))
             return False, "生成登录链接失败，请稍后再试。"
-        text = (
-            "EatBit 一次性登录链接（5 分钟内有效、只能使用一次）：\n"
-            f"{data['url']}\n"
-            "打开后即可登录；以后用这个 QQ 记录会自动写入你的账号。"
-        )
+        if binding:
+            text = (
+                "EatBit 账号绑定链接（5 分钟内有效、只能使用一次）：\n"
+                f"{target_url}\n"
+                "页面会显示当前 EatBit 账号；确认无误后再绑定，也可以先切换账号。"
+            )
+        else:
+            text = (
+                "EatBit 一次性登录链接（5 分钟内有效、只能使用一次）：\n"
+                f"{target_url}\n"
+                "打开后进入已经绑定的账号。需要换绑请发送“绑定”。"
+            )
         try:
             await event.bot.send_private_msg(user_id=int(event.get_sender_id()), message=text)
-            return True, "登录链接已私聊发送，请查看机器人消息。"
+            action = "绑定" if binding else "登录"
+            return True, f"{action}链接已私聊发送，请查看机器人消息。"
         except Exception as error:
             logger.warning("EatBit private login message failed: %s", error)
             return False, "私聊发送失败。请先加机器人好友，再私聊发送“登录”。"
@@ -196,7 +207,7 @@ class EatBitPlugin(Star):
             + "\n请提取最终表单。用户后发的纠正（如‘菜品是…’）优先。"
         )
         system_prompt = """你是校园用餐记录表单解析器。只返回一个 JSON 对象，不要 Markdown 和解释。
-字段：areaName, shopName, shopId, newShop, itemName, itemId, newItem, price, score, mealSlot, review。
+字段：areaName, shopName, shopId, newShop, itemName, itemId, newItem, price, score, mealSlot, review, issues。
 规则：
 1. area 是目录中的物理区域；shop 是具体商家、窗口或食物来源；item 是菜品。
 2. 只有目录里确实存在且语义一致时才填写对应 id，否则 id 为空，并将 newShop 或 newItem 设为 true。
@@ -324,6 +335,11 @@ class EatBitPlugin(Star):
         parsed_slot = str(parsed.get("mealSlot") or "")
         meal_slot = parsed_slot if parsed_slot in {"早餐", "午餐", "晚餐", "夜宵", "其他"} else self._meal_slot(joined)
         review = str(parsed.get("review") or joined).strip()
+        issues = [str(issue).strip() for issue in parsed.get("issues", []) if str(issue).strip()] if isinstance(parsed.get("issues"), list) else []
+        if not new_item_name and not item:
+            issues.append("没有识别到菜品，可以用人话回复“菜品改成……”")
+        if price == "未识别":
+            issues.append("没有识别到价格；不影响提交，也可以补充价格")
         preview = {
             "parsedByModel": bool(parsed),
             "shopId": str(shop["id"]) if shop else "",
@@ -339,6 +355,7 @@ class EatBitPlugin(Star):
             "mealSlot": meal_slot,
             "text": review,
             "hasImage": bool(draft.images),
+            "issues": list(dict.fromkeys(issues)),
         }
         draft.preview = preview
         draft.waiting_for_score = score is None
@@ -353,6 +370,8 @@ class EatBitPlugin(Star):
             f"图片：{'1 张' if preview['hasImage'] else '无'}",
             f"评价：{review}",
         ]
+        if preview["issues"]:
+            lines.append("AI 建议补充或核对：" + "；".join(preview["issues"]))
         if score is None:
             lines.append("还差数字评分，请回复“评分5”（支持 1～5 分）。")
         else:
@@ -439,7 +458,12 @@ class EatBitPlugin(Star):
         images = self._image_parts(event)
 
         if mentioned and lowered in {"登录", "登陆", "eatbit登录", "eatbit登陆"}:
-            _, reply = await self._send_private_login(event)
+            _, reply = await self._send_private_login(event, binding=False)
+            yield self._reply(event, reply)
+            return
+
+        if mentioned and lowered in {"绑定", "重新绑定", "换绑", "eatbit绑定"}:
+            _, reply = await self._send_private_login(event, binding=True)
             yield self._reply(event, reply)
             return
 
@@ -481,14 +505,15 @@ class EatBitPlugin(Star):
             yield self._reply(event, reply)
             return
 
-        if text and text not in {"完成", "发完了", "提交"}:
+        completion = re.match(r"^(?:完成|发完了|提交)(?:\s*[:：,，;；]?\s*(.*))?$", text)
+        if completion and completion.group(1):
+            draft.texts.append(completion.group(1).strip())
+        elif text and not completion:
             draft.texts.append(text)
         if images and not draft.images:
             draft.images.append(images[0])
 
-        should_preview = text in {"完成", "发完了", "提交"}
-        if draft.waiting_for_score and self._score_from_text(text) is not None:
-            should_preview = True
+        should_preview = bool(completion) or draft.preview is not None
         if should_preview:
             try:
                 _, reply = await self._make_preview(event, draft)

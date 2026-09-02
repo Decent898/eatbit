@@ -36,10 +36,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
      WHERE qq_identities.platform = 'onebot11' AND qq_identities.external_user_id = ?`
   ).bind(qqId).first<{ nickname: string }>()
 
-  const url = new URL('/api/auth/qq-login', request.url)
-  url.searchParams.set('ticket', ticket)
+  const loginUrl = new URL('/api/auth/qq-login', request.url)
+  loginUrl.searchParams.set('ticket', ticket)
+  const bindUrl = new URL('/qq-bind', request.url)
+  bindUrl.searchParams.set('ticket', ticket)
   return json({
-    url: url.toString(),
+    url: identity ? loginUrl.toString() : bindUrl.toString(),
+    loginUrl: loginUrl.toString(),
+    bindUrl: bindUrl.toString(),
     expiresIn: 300,
     bound: Boolean(identity),
     nickname: identity?.nickname ?? ''

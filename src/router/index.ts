@@ -42,6 +42,12 @@ const router = createRouter({
       meta: { keepAlive: false }
     },
     {
+      path: '/qq-bind',
+      name: 'qq-bind',
+      component: () => import('@/views/QqBind.vue'),
+      meta: { keepAlive: false }
+    },
+    {
       path: '/feedback',
       name: 'feedback',
       component: () => import('@/views/Feedback.vue'),
@@ -65,6 +71,7 @@ router.beforeEach((to) => {
     area: '区域店面',
     shop: '店面详情',
     profile: '个人中心',
+    'qq-bind': '绑定 QQ',
     feedback: '问题反馈',
     'admin-dashboard': '管理员后台',
     'admin-canteens': '食堂区管理',
