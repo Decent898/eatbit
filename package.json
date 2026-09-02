@@ -10,8 +10,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "pages:dev": "npm run build && wrangler pages dev dist",
-    "db:migrate:local": "wrangler d1 migrations apply bit-food-forum --local",
-    "db:migrate:remote": "wrangler d1 migrations apply bit-food-forum --remote"
+    "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.toml",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote --config wrangler.toml"
   },
   "dependencies": {
     "@vicons/material": "^0.12.0",

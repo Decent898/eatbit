@@ -1,0 +1,23 @@
+{
+  "api_base": {
+    "description": "EatBit 网站地址",
+    "type": "string",
+    "default": "https://eat.bitdate.date"
+  },
+  "bot_token": {
+    "description": "与 Cloudflare Pages 的 BOT_API_TOKEN 保持一致",
+    "type": "string",
+    "hint": "请填写随机生成的长密钥",
+    "default": ""
+  },
+  "allowed_group_ids": {
+    "description": "允许使用的 QQ 群号，逗号分隔；留空表示所有群",
+    "type": "string",
+    "default": ""
+  },
+  "draft_timeout_seconds": {
+    "description": "连续消息草稿超时时间（秒）",
+    "type": "int",
+    "default": 180
+  }
+}

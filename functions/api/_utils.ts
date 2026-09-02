@@ -1,6 +1,7 @@
 export interface Env {
   DB: D1Database
   ADMIN_PASSWORD?: string
+  BOT_API_TOKEN?: string
   AI?: {
     run(model: string, input: unknown): Promise<unknown>
   }
@@ -70,6 +71,28 @@ export function getSessionToken(request: Request) {
 
 function toHex(buffer: ArrayBuffer) {
   return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+export async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return toHex(digest)
+}
+
+export async function requireBot(request: Request, env: Env) {
+  const expected = env.BOT_API_TOKEN?.trim() ?? ''
+  const authorization = request.headers.get('authorization')?.trim() ?? ''
+  const supplied = authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? ''
+  if (!expected || !supplied) return false
+
+  const [expectedHash, suppliedHash] = await Promise.all([
+    sha256Hex(expected),
+    sha256Hex(supplied)
+  ])
+  let different = expectedHash.length ^ suppliedHash.length
+  for (let index = 0; index < expectedHash.length; index += 1) {
+    different |= expectedHash.charCodeAt(index) ^ suppliedHash.charCodeAt(index)
+  }
+  return different === 0
 }
 
 export function randomToken(bytes = 32) {

@@ -1,0 +1,6 @@
+name: astrbot_plugin_eatbit
+display_name: EatBit 群聊记餐
+desc: 通过 QQ 群中的图片和连续文字登录 EatBit、匹配店铺菜品并确认写入用餐记录。
+version: 0.1.0
+author: DecEric
+repo: https://github.com/Decent898/eatbit

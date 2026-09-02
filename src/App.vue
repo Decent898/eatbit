@@ -53,10 +53,21 @@ function toggleTheme() {
   themeMode.value = dark.value ? 'light' : 'dark'
 }
 
-onMounted(() => {
+onMounted(async () => {
   prefersDark.addEventListener('change', syncTheme)
-  auth.loadMe()
+  await auth.loadMe()
   food.loadFromApi()
+  const qqLogin = String(route.query.qq_login ?? '')
+  if (qqLogin === 'success') {
+    window.$message.success('QQ 登录成功，之后可以直接通过机器人记录用餐')
+    router.replace({ path: route.path, query: { ...route.query, qq_login: undefined } })
+  } else if (qqLogin) {
+    const message = qqLogin === 'account_already_bound'
+      ? '这个 EatBit 账号已经绑定了另一个 QQ'
+      : 'QQ 登录链接无效或已经过期，请重新 @机器人 登录'
+    window.$message.error(message)
+    router.replace({ path: route.path, query: { ...route.query, qq_login: undefined } })
+  }
 })
 
 watch(themeMode, (value) => {
