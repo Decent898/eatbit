@@ -17,7 +17,7 @@ from PIL import Image as PilImage
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.message_components import At, Image
+from astrbot.api.message_components import At, Image, Plain
 from astrbot.api.star import Context, Star, register
 
 
@@ -50,7 +50,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.10",
+    "0.5.11",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -75,6 +75,27 @@ class EatBitPlugin(Star):
         self.draft_image_dir.mkdir(parents=True, exist_ok=True)
         self.catalog: dict[str, list[dict[str, Any]]] | None = None
         self.catalog_loaded_at = 0.0
+
+    @staticmethod
+    def _plain_qq_text(text: str) -> str:
+        """Remove Markdown decoration that QQ merged-forward cards cannot render."""
+        text = text.replace("**", "")
+        text = re.sub(r"(?m)^(\s*)\*\s+", r"\1• ", text)
+        return text
+
+    @filter.on_decorating_result()
+    async def clean_long_reply_markdown(self, event: AstrMessageEvent) -> None:
+        """Clean long plain-text replies before AstrBot folds them into QQ nodes."""
+        if event.get_platform_name() != "aiocqhttp":
+            return
+        result = event.get_result()
+        if not result:
+            return
+        plain_parts = [part for part in result.chain if isinstance(part, Plain)]
+        if sum(len(part.text) for part in plain_parts) <= 500:
+            return
+        for part in plain_parts:
+            part.text = self._plain_qq_text(part.text)
 
     @staticmethod
     def _qwen_compatible_messages(messages: list[Any]) -> list[dict[str, Any]]:
