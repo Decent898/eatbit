@@ -50,7 +50,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.8",
+    "0.5.9",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -217,7 +217,11 @@ class EatBitPlugin(Star):
                 raise ValueError("vision provider is not a Workers AI provider")
             keys = provider.get_keys()
             api_key = str(keys[0] if isinstance(keys, list) else keys)
-            model = str(provider_config.get("model_config", {}).get("model", ""))
+            model = str(provider.get_model() or provider_config.get("model", "")).strip()
+            if not model:
+                raise ValueError(
+                    f"vision provider {self.vision_provider_id!r} has no configured model"
+                )
             image_variants = [
                 await self._compressed_data_url(images[0]),
                 await self._compressed_data_url(images[0], max_side=768, max_bytes=60_000),
