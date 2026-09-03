@@ -50,7 +50,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.4",
+    "0.5.5",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -190,6 +190,8 @@ class EatBitPlugin(Star):
         if binding:
             text = (
                 "当前 QQ 尚未绑定 EatBit。\n"
+                "登录/绑定用于确认记录归属，并把群聊记餐同步到你的个人记录。\n"
+                "这里使用的是“吃在北理”网页和小程序共用的同一个 EatBit 账号，账号与数据互通，不是机器人单独创建的账号。\n"
                 "请仅由记录发起者打开下面的绑定链接，不要转发（5 分钟内有效、只能使用一次）：\n"
                 f"{target_url}\n"
                 "可以登录已有账号；没有账号时，填写新邮箱和昵称会自动注册并绑定。"

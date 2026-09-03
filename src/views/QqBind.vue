@@ -67,7 +67,7 @@ async function switchAccount() {
   <div class="container bind-page">
     <n-card title="绑定 QQ 到 EatBit" size="large">
       <n-alert type="warning" :bordered="false">
-        已有 EatBit 账号可以直接登录并绑定；没有账号时，填写新邮箱和昵称会自动注册并绑定。
+        登录/绑定用于确认群聊记餐的归属，并把记录同步到你的个人记录。这里使用的是“吃在北理”网页和小程序共用的同一个 EatBit 账号，账号与数据互通，不是机器人单独创建的账号。已有账号可以直接登录并绑定；没有账号时，填写新邮箱和昵称会自动注册并绑定。
       </n-alert>
       <n-space v-if="auth.user.value" vertical size="large" class="account-block">
         <div>当前 EatBit 账号</div>
