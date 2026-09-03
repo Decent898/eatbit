@@ -50,7 +50,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.3",
+    "0.5.4",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -167,7 +167,7 @@ class EatBitPlugin(Star):
                 self.catalog_loaded_at = time.time()
                 return self.catalog
 
-    async def _send_private_login(
+    async def _login_link_reply(
         self,
         event: AstrMessageEvent,
         binding: bool = False,
@@ -189,9 +189,10 @@ class EatBitPlugin(Star):
             return False, "生成登录链接失败，请稍后再试。"
         if binding:
             text = (
-                "EatBit 账号绑定链接（5 分钟内有效、只能使用一次）：\n"
+                "当前 QQ 尚未绑定 EatBit。\n"
+                "请仅由记录发起者打开下面的绑定链接，不要转发（5 分钟内有效、只能使用一次）：\n"
                 f"{target_url}\n"
-                "页面会显示当前 EatBit 账号；确认无误后再绑定，也可以先切换账号。"
+                "可以登录已有账号；没有账号时，填写新邮箱和昵称会自动注册并绑定。"
             )
         else:
             text = (
@@ -199,13 +200,7 @@ class EatBitPlugin(Star):
                 f"{target_url}\n"
                 "打开后进入已经绑定的账号。需要换绑请发送“绑定”。"
             )
-        try:
-            await event.bot.send_private_msg(user_id=int(event.get_sender_id()), message=text)
-            action = "绑定" if binding else "登录"
-            return True, f"{action}链接已私聊发送，请查看机器人消息。"
-        except Exception as error:
-            logger.warning("EatBit private login message failed: %s", error)
-            return False, "私聊发送失败。请先加机器人好友，再私聊发送“登录”。"
+        return True, text
 
     async def _describe_images(
         self, event: AstrMessageEvent, images: list[Image], prompt: str
@@ -724,12 +719,12 @@ class EatBitPlugin(Star):
         images = self._image_parts(event)
 
         if mentioned and lowered in {"登录", "登陆", "eatbit登录", "eatbit登陆"}:
-            _, reply = await self._send_private_login(event, binding=False)
+            _, reply = await self._login_link_reply(event, binding=False)
             yield self._reply(event, reply)
             return
 
         if mentioned and lowered in {"绑定", "重新绑定", "换绑", "eatbit绑定"}:
-            _, reply = await self._send_private_login(event, binding=True)
+            _, reply = await self._login_link_reply(event, binding=True)
             yield self._reply(event, reply)
             return
 
@@ -759,7 +754,7 @@ class EatBitPlugin(Star):
                 yield self._reply(event, "暂时无法检查 EatBit 账号绑定状态，请稍后重试。")
                 return
             if not ticket_data.get("bound"):
-                _, reply = await self._send_private_login(
+                _, reply = await self._login_link_reply(
                     event, binding=True, ticket_data=ticket_data
                 )
                 yield self._reply(
