@@ -5,9 +5,11 @@ import asyncio
 import io
 import json
 import re
+import shutil
 import time
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -25,7 +27,7 @@ class Draft:
     updated_at: float
     first_message_id: str
     texts: list[str] = field(default_factory=list)
-    images: list[Image] = field(default_factory=list)
+    images: list[str] = field(default_factory=list)
     preview: dict[str, Any] | None = None
     waiting_for_score: bool = False
 
@@ -48,7 +50,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.1",
+    "0.5.3",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -64,6 +66,13 @@ class EatBitPlugin(Star):
         self.vision_provider_id = str(config.get("vision_provider_id", "vision")).strip()
         self.vision_timeout = max(5, min(60, int(config.get("vision_timeout_seconds", 20))))
         self.drafts: dict[tuple[str, str], Draft] = {}
+        self.draft_image_dir = (
+            Path(__file__).resolve().parents[2]
+            / "plugin_data"
+            / "astrbot_plugin_eatbit"
+            / "draft_images"
+        )
+        self.draft_image_dir.mkdir(parents=True, exist_ok=True)
         self.catalog: dict[str, list[dict[str, Any]]] | None = None
         self.catalog_loaded_at = 0.0
 
@@ -159,14 +168,21 @@ class EatBitPlugin(Star):
                 return self.catalog
 
     async def _send_private_login(
-        self, event: AstrMessageEvent, binding: bool = False
+        self,
+        event: AstrMessageEvent,
+        binding: bool = False,
+        ticket_data: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
         if not self.bot_token:
             return False, "机器人尚未配置 EatBit 密钥，请联系管理员。"
-        status, data = await self._post(
-            "/api/bot/login-ticket",
-            {"qqId": event.get_sender_id(), "nickname": event.get_sender_name()},
-        )
+        if ticket_data is None:
+            status, data = await self._post(
+                "/api/bot/login-ticket",
+                {"qqId": event.get_sender_id(), "nickname": event.get_sender_name()},
+            )
+        else:
+            status, data = 200, ticket_data
+        binding = binding or not bool(data.get("bound"))
         target_url = data.get("bindUrl") if binding else data.get("url")
         if status != 200 or not target_url:
             logger.error("EatBit login ticket failed: %s %s", status, data.get("error"))
@@ -267,9 +283,26 @@ class EatBitPlugin(Star):
 
     def _prune_drafts(self) -> None:
         cutoff = time.time() - self.draft_timeout
-        self.drafts = {
-            key: draft for key, draft in self.drafts.items() if draft.updated_at >= cutoff
-        }
+        for key, draft in list(self.drafts.items()):
+            if draft.updated_at < cutoff:
+                self._delete_draft_images(draft)
+                self.drafts.pop(key, None)
+
+    def _delete_draft_images(self, draft: Draft) -> None:
+        for image_path in draft.images:
+            try:
+                Path(image_path).unlink(missing_ok=True)
+            except OSError as error:
+                logger.warning("Unable to delete EatBit draft image %s: %s", image_path, error)
+
+    async def _persist_draft_image(self, image: Image) -> str:
+        source_path = Path(await image.convert_to_file_path())
+        suffix = source_path.suffix.lower()
+        if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}:
+            suffix = ".img"
+        target_path = self.draft_image_dir / f"{time.time_ns()}_{source_path.stem[-12:]}{suffix}"
+        await asyncio.to_thread(shutil.copy2, source_path, target_path)
+        return str(target_path)
 
     @staticmethod
     def _best_match(
@@ -295,6 +328,22 @@ class EatBitPlugin(Star):
             match = re.search(pattern, text.strip(), re.I)
             if match:
                 return match.group(1).strip()
+        return ""
+
+    @staticmethod
+    def _explicit_shop_name(texts: list[str]) -> str:
+        """Return the user's latest explicit shop correction, if present."""
+        next_field = "区域|食堂|地点|菜品|餐品|价格|评分|打分"
+        pattern = re.compile(
+            rf"(?:^|[\s，,；;])(?:修改\s*[:：]\s*)?"
+            rf"(?:店铺|店名|商家|窗口)\s*(?:是|叫|为|[:：])\s*"
+            rf"(.+?)(?=[\s，,；;]+(?:{next_field})(?:\s*(?:是|叫|为|[:：]))?|$)",
+            re.I,
+        )
+        for text in reversed(texts):
+            matches = list(pattern.finditer(text.strip()))
+            if matches:
+                return matches[-1].group(1).strip(" \t，,；;")
         return ""
 
     async def _llm_parse(
@@ -351,11 +400,12 @@ class EatBitPlugin(Star):
 1. area 是目录中的物理区域；shop 是具体商家、窗口或食物来源；item 是菜品。
 2. 只有目录里确实存在且语义一致时才填写对应 id，否则 id 为空，并将 newShop 或 newItem 设为 true。
 3. “新店：”是用户明确要求新建店铺；“区域：”不是店名的一部分。
-4. “菜品是…”、“餐品：…”是菜品纠正；不要把菜品误当店名。
-5. price 保留金额和单位；score 仅在用户明确给出 1-5 数字评分时填写数字，否则为 null。
-6. mealSlot 只能是早餐、午餐、晚餐、夜宵、其他；没有线索则为空。
-7. review 只保留对这顿饭有意义的描述，去掉“完成、确认、新店、区域、评分”等控制文字，但不要编造。
-8. 中关村“教工食堂”如果出现在 area 目录中，应当作为区域理解。"""
+4. 用户最后明确说“店铺是…”、“店铺：…”或“修改：店铺：…”时必须覆盖之前的店铺判断；目录没有精确同名店铺就按新店处理，不得用相似店铺替代。
+5. “菜品是…”、“餐品：…”是菜品纠正；不要把菜品误当店名。
+6. price 保留金额和单位；score 仅在用户明确给出 1-5 数字评分时填写数字，否则为 null。
+7. mealSlot 只能是早餐、午餐、晚餐、夜宵、其他；没有线索则为空。
+8. review 只保留对这顿饭有意义的描述，去掉“完成、确认、新店、区域、评分”等控制文字，但不要编造。
+9. 中关村“教工食堂”如果出现在 area 目录中，应当作为区域理解。"""
         response = await asyncio.wait_for(
             provider.text_chat(
                 prompt=prompt,
@@ -500,10 +550,23 @@ class EatBitPlugin(Star):
 
         shops = [shop for shop in catalog.get("shops", []) if not shop.get("isClosed")]
         labelled_new_shop = self._label_value(texts, ("新店", "新增店铺"))
-        proposed_shop_name = str(parsed.get("shopName") or labelled_new_shop).strip()
+        explicit_shop_name = self._explicit_shop_name(texts)
+        proposed_shop_name = str(
+            explicit_shop_name or parsed.get("shopName") or labelled_new_shop
+        ).strip()
         force_new_shop = bool(parsed.get("newShop")) or bool(labelled_new_shop)
-        model_shop_id = str(parsed.get("shopId") or "")
+        model_shop_id = "" if explicit_shop_name else str(parsed.get("shopId") or "")
         shop = next((entry for entry in shops if str(entry.get("id")) == model_shop_id), None)
+        if explicit_shop_name:
+            shop = next(
+                (
+                    entry
+                    for entry in shops
+                    if normalize(str(entry.get("name", ""))) == normalize(explicit_shop_name)
+                ),
+                None,
+            )
+            force_new_shop = shop is None
         if not shop and not force_new_shop:
             shop, _ = self._best_match(
                 [str(parsed.get("shopName") or ""), *texts], shops, 0.53
@@ -582,8 +645,8 @@ class EatBitPlugin(Star):
         return preview, self._render_preview(preview)
 
     @staticmethod
-    async def _compressed_data_url(image: Image) -> str:
-        path = await image.convert_to_file_path()
+    async def _compressed_data_url(image: Image | str) -> str:
+        path = await image.convert_to_file_path() if isinstance(image, Image) else image
         with PilImage.open(path) as source:
             picture = source.convert("RGB")
             picture.thumbnail((1280, 1280), PilImage.Resampling.LANCZOS)
@@ -683,6 +746,27 @@ class EatBitPlugin(Star):
 
         starts_record = mentioned and bool(record_command)
         if not draft and starts_record:
+            status, ticket_data = await self._post(
+                "/api/bot/login-ticket",
+                {"qqId": event.get_sender_id(), "nickname": event.get_sender_name()},
+            )
+            if status != 200:
+                logger.error(
+                    "EatBit binding check failed: %s %s",
+                    status,
+                    ticket_data.get("error"),
+                )
+                yield self._reply(event, "暂时无法检查 EatBit 账号绑定状态，请稍后重试。")
+                return
+            if not ticket_data.get("bound"):
+                _, reply = await self._send_private_login(
+                    event, binding=True, ticket_data=ticket_data
+                )
+                yield self._reply(
+                    event,
+                    reply + "\n绑定完成后，请重新发送“记录吃饭”。",
+                )
+                return
             now = time.time()
             draft = Draft(
                 created_at=now,
@@ -693,7 +777,14 @@ class EatBitPlugin(Star):
             clean = text[record_command.end():].lstrip(" \t：:，,")
             if clean:
                 draft.texts.append(clean)
-            draft.images.extend(images[:1])
+            if images:
+                try:
+                    draft.images.append(await self._persist_draft_image(images[0]))
+                except Exception as error:
+                    logger.exception("Unable to preserve EatBit draft image: %s", error)
+                    self.drafts.pop(key, None)
+                    yield self._reply(event, "图片暂存失败，请重新发送“记录吃饭”和图片。")
+                    return
             yield self._reply(event, "开始收集这顿饭。继续发送图片和文字，最后发送“完成”。")
             return
 
@@ -703,6 +794,7 @@ class EatBitPlugin(Star):
         event.stop_event()
         draft.updated_at = time.time()
         if text in {"取消", "算了", "不记了"}:
+            self._delete_draft_images(draft)
             self.drafts.pop(key, None)
             yield self._reply(event, "已取消这条 EatBit 记录。")
             return
@@ -714,6 +806,7 @@ class EatBitPlugin(Star):
                 logger.exception("EatBit submit crashed: %s", error)
                 ok, reply = False, "写入失败，草稿仍保留；可以稍后再次回复“确认”。"
             if ok:
+                self._delete_draft_images(draft)
                 self.drafts.pop(key, None)
             yield self._reply(event, reply)
             return
@@ -732,7 +825,12 @@ class EatBitPlugin(Star):
         elif text and not completion:
             draft.texts.append(text)
         if images and not draft.images:
-            draft.images.append(images[0])
+            try:
+                draft.images.append(await self._persist_draft_image(images[0]))
+            except Exception as error:
+                logger.exception("Unable to preserve EatBit draft image: %s", error)
+                yield self._reply(event, "图片暂存失败，请重新发送这张图片。")
+                return
 
         should_preview = bool(completion) or draft.preview is not None
         if should_preview:

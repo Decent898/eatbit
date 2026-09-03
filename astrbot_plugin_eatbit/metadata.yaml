@@ -1,6 +1,6 @@
 name: astrbot_plugin_eatbit
 display_name: EatBit 群聊记餐
 desc: 用 AI 整理 QQ 群中的连续图文，以自然语言补全或修改后确认写入 EatBit。
-version: 0.5.1
+version: 0.5.3
 author: DecEric
 repo: https://github.com/Decent898/eatbit

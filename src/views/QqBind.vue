@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 
@@ -8,6 +8,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const ticket = computed(() => String(route.query.ticket ?? ''))
 const submitting = ref(false)
+const bindAfterAuth = ref(false)
 
 onMounted(() => auth.loadMe())
 
@@ -39,6 +40,22 @@ async function bindCurrentAccount() {
   }
 }
 
+function loginOrRegisterAndBind() {
+  bindAfterAuth.value = true
+  auth.authModal.value = true
+  window.$message.info('已有账号会直接登录；新邮箱会自动注册，随后完成 QQ 绑定')
+}
+
+watch(() => auth.user.value, (user) => {
+  if (!user || !bindAfterAuth.value) return
+  bindAfterAuth.value = false
+  void bindCurrentAccount()
+})
+
+watch(() => auth.authModal.value, (show) => {
+  if (!show && !auth.user.value) bindAfterAuth.value = false
+})
+
 async function switchAccount() {
   await auth.logout()
   auth.authModal.value = true
@@ -50,7 +67,7 @@ async function switchAccount() {
   <div class="container bind-page">
     <n-card title="绑定 QQ 到 EatBit" size="large">
       <n-alert type="warning" :bordered="false">
-        绑定只会关联你明确确认的现有 EatBit 账号，不会再自动创建同名账号。
+        已有 EatBit 账号可以直接登录并绑定；没有账号时，填写新邮箱和昵称会自动注册并绑定。
       </n-alert>
       <n-space v-if="auth.user.value" vertical size="large" class="account-block">
         <div>当前 EatBit 账号</div>
@@ -64,8 +81,8 @@ async function switchAccount() {
         </n-space>
       </n-space>
       <n-space v-else vertical size="large" class="account-block">
-        <div>请先登录你原来的 EatBit 账号，再回来确认绑定。</div>
-        <n-button type="primary" @click="bindCurrentAccount">登录现有账号</n-button>
+        <div>登录已有账号，或填写新邮箱和昵称自动注册。完成后会继续绑定当前 QQ。</div>
+        <n-button type="primary" @click="loginOrRegisterAndBind">登录或注册并绑定</n-button>
       </n-space>
     </n-card>
   </div>
