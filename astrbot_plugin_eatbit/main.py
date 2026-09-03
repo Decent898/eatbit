@@ -50,7 +50,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.6",
+    "0.5.7",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -220,19 +220,11 @@ class EatBitPlugin(Star):
             model = str(provider_config.get("model_config", {}).get("model", ""))
             image_data = await self._compressed_data_url(images[0])
             payload = {
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "你是群聊中的视觉助手。请准确识别图片，用简洁自然的中文回答；"
-                            "看不清或无法确定的内容要明确说明，不要编造。"
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt or "请描述图片内容，并回答图片相关问题。",
-                    },
-                ],
+                "prompt": (
+                    "你是群聊中的视觉助手。请准确识别图片，用简洁自然的中文回答；"
+                    "看不清或无法确定的内容要明确说明，不要编造。\n\n"
+                    + (prompt or "请描述图片内容，并回答图片相关问题。")
+                ),
                 "image": image_data,
                 "temperature": 0.2,
                 "max_tokens": 500,
@@ -250,7 +242,8 @@ class EatBitPlugin(Star):
                     body = await response.json()
                     if response.status != 200 or not body.get("success"):
                         raise RuntimeError(
-                            f"Workers AI returned HTTP {response.status}"
+                            f"Workers AI returned HTTP {response.status}: "
+                            f"{body.get('errors') or body.get('messages') or body}"
                         )
             answer = str(body.get("result", {}).get("response") or "").strip()
         except (asyncio.TimeoutError, aiohttp.ServerTimeoutError):
