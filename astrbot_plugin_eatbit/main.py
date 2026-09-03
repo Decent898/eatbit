@@ -50,7 +50,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.9",
+    "0.5.10",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -289,6 +289,26 @@ class EatBitPlugin(Star):
     @staticmethod
     def _reply(event: AstrMessageEvent, text: str):
         return event.plain_result(text).stop_event()
+
+    @staticmethod
+    def _help_text() -> str:
+        return (
+            "EatBit（吃在北理）是面向北京理工大学校园饮食的开源社区，网页和微信小程序共用同一套账号与数据。\n\n"
+            "你可以在 EatBit 查看食堂区域、店铺和菜品，参考价格、评分、评论与图片；"
+            "也支持搜索、排行榜、随机‘骰一下’、个人吃饭记录与统计、店铺关门/菜品下架状态、"
+            "工单反馈和 AI 推荐吃什么。\n\n"
+            "群聊记餐用法：\n"
+            "1. @我 发送‘记录吃饭’；未绑定时会先给出 EatBit 账号绑定链接。\n"
+            "2. 接着发送一张饭菜图片和自然语言说明，例如店铺、菜品、价格、评价与评分。\n"
+            "3. 发送‘完成’；AI 会整理并校验店铺、区域、菜品、价格、餐次和评分。\n"
+            "4. 有错误就直接说人话修改，例如‘店铺改成东二滑蛋饭，评分5’。\n"
+            "5. 预览无误后发送‘确认’，记录才会写入 EatBit；发送‘取消’可放弃。\n\n"
+            "找不到的店铺或菜品也可以新建，机器人会在预览中明确标注‘将新建’，不会未经确认直接写入。\n"
+            "普通场景还可以 @我并附图进行图片识别。\n\n"
+            "网页版：https://eat.bitdate.date/home\n"
+            "开源仓库：https://github.com/Decent898/eatbit\n"
+            "当前群聊插件版本：0.5.10"
+        )
 
     def _prune_drafts(self) -> None:
         cutoff = time.time() - self.draft_timeout
@@ -733,6 +753,12 @@ class EatBitPlugin(Star):
         mentioned = self._contains_bot_at(event) if group_id != "private" else True
         key = (group_id, sender_id)
         images = self._image_parts(event)
+
+        if mentioned and "eatbit" in lowered and any(
+            intent in lowered for intent in ("介绍", "帮助", "怎么用", "如何用", "是什么", "功能")
+        ):
+            yield self._reply(event, self._help_text())
+            return
 
         if mentioned and lowered in {"登录", "登陆", "eatbit登录", "eatbit登陆"}:
             _, reply = await self._login_link_reply(event, binding=False)
