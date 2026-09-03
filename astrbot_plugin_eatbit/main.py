@@ -50,7 +50,7 @@ def similarity(query: str, candidate: str) -> float:
     "astrbot_plugin_eatbit",
     "DecEric",
     "EatBit QQ 群聊记餐",
-    "0.5.7",
+    "0.5.8",
     "https://github.com/Decent898/eatbit",
 )
 class EatBitPlugin(Star):
@@ -218,33 +218,48 @@ class EatBitPlugin(Star):
             keys = provider.get_keys()
             api_key = str(keys[0] if isinstance(keys, list) else keys)
             model = str(provider_config.get("model_config", {}).get("model", ""))
-            image_data = await self._compressed_data_url(images[0])
-            payload = {
-                "prompt": (
-                    "你是群聊中的视觉助手。请准确识别图片，用简洁自然的中文回答；"
-                    "看不清或无法确定的内容要明确说明，不要编造。\n\n"
-                    + (prompt or "请描述图片内容，并回答图片相关问题。")
-                ),
-                "image": image_data,
-                "temperature": 0.2,
-                "max_tokens": 500,
-            }
+            image_variants = [
+                await self._compressed_data_url(images[0]),
+                await self._compressed_data_url(images[0], max_side=768, max_bytes=60_000),
+            ]
+            vision_prompt = (
+                "你是群聊中的视觉助手。请准确识别图片，用简洁自然的中文回答；"
+                "看不清或无法确定的内容要明确说明，不要编造。\n\n"
+                + (prompt or "请描述图片内容，并回答图片相关问题。")
+            )
             timeout = aiohttp.ClientTimeout(total=self.vision_timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    api_base.split("/ai/v1", 1)[0] + "/ai/run/" + model,
-                    headers={
-                        "authorization": f"Bearer {api_key}",
-                        "content-type": "application/json",
-                    },
-                    json=payload,
-                ) as response:
-                    body = await response.json()
-                    if response.status != 200 or not body.get("success"):
-                        raise RuntimeError(
-                            f"Workers AI returned HTTP {response.status}: "
+                last_error = ""
+                for attempt, image_data in enumerate(image_variants, start=1):
+                    async with session.post(
+                        api_base.split("/ai/v1", 1)[0] + "/ai/run/" + model,
+                        headers={
+                            "authorization": f"Bearer {api_key}",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "prompt": vision_prompt,
+                            "image": image_data,
+                            "temperature": 0.2,
+                            "max_tokens": 500,
+                        },
+                    ) as response:
+                        body = await response.json()
+                        if response.status == 200 and body.get("success"):
+                            break
+                        last_error = (
+                            f"HTTP {response.status}: "
                             f"{body.get('errors') or body.get('messages') or body}"
                         )
+                        logger.warning(
+                            "Workers AI vision attempt %s failed (model=%s, image_chars=%s): %s",
+                            attempt,
+                            model,
+                            len(image_data),
+                            last_error,
+                        )
+                else:
+                    raise RuntimeError(f"Workers AI returned {last_error}")
             answer = str(body.get("result", {}).get("response") or "").strip()
         except (asyncio.TimeoutError, aiohttp.ServerTimeoutError):
             logger.warning(
@@ -635,17 +650,19 @@ class EatBitPlugin(Star):
         return preview, self._render_preview(preview)
 
     @staticmethod
-    async def _compressed_data_url(image: Image | str) -> str:
+    async def _compressed_data_url(
+        image: Image | str, max_side: int = 1280, max_bytes: int = 100_000
+    ) -> str:
         path = await image.convert_to_file_path() if isinstance(image, Image) else image
         with PilImage.open(path) as source:
             picture = source.convert("RGB")
-            picture.thumbnail((1280, 1280), PilImage.Resampling.LANCZOS)
+            picture.thumbnail((max_side, max_side), PilImage.Resampling.LANCZOS)
             for quality in (78, 68, 58, 48, 40):
                 output = io.BytesIO()
                 picture.save(output, format="JPEG", quality=quality, optimize=True)
                 raw = output.getvalue()
-                if len(raw) <= 100_000 or quality == 40:
-                    while len(raw) > 100_000 and picture.width > 480:
+                if len(raw) <= max_bytes or quality == 40:
+                    while len(raw) > max_bytes and picture.width > 480:
                         picture.thumbnail(
                             (int(picture.width * 0.82), int(picture.height * 0.82)),
                             PilImage.Resampling.LANCZOS,
